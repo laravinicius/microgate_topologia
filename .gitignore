@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Environment / Secrets
+.env
+.env.*
+
+# PM2
+pm2.log
+pm2-prometheus-metrics
+*.pid
+*.pid.lock
+
+# Verboo Code (agent config)
+.verboo/
+
+# Session data (generated at runtime)
+.sessions.json
+
+# Backup files
+*.bkp
+
+# Plans / scratch files
+plan.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Build / dist (if applicable)
+dist/
+build/
