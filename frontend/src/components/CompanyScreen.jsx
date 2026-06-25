@@ -84,6 +84,7 @@ export default function CompanyScreen({ onCompanySelected }) {
     <div className="companyScreenWrapper">
       <div className="companyScreen">
         <header>
+          <div className="headerLeft"></div>
           <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
           <div className="headerRight">
             {isAdmin && (

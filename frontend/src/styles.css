@@ -47,7 +47,7 @@ html {
 
 body {
     margin: 0;
-    font-family: Inter, 'Segoe UI', sans-serif;
+    font-family: 'Segoe UI', sans-serif;
     min-height: 100vh;
     color: var(--text);
     background:
@@ -608,6 +608,8 @@ header {
 
 .rackItemAcoes {
     flex-shrink: 0;
+    display: flex;
+    gap: 6px;
 }
 
 .botaoApagarRack {
@@ -857,6 +859,7 @@ main {
     align-items: center;
     justify-content: center;
     min-height: 48px;
+    white-space: nowrap;
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -1595,7 +1598,7 @@ main {
 
 .companyScreen header {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     height: 60px;
     padding: 0 15px;
@@ -1609,13 +1612,13 @@ main {
     height: 36px;
     max-width: 100%;
     object-fit: contain;
-    justify-self: center;
 }
 
 .companyScreen .headerRight {
     display: flex;
     gap: 8px;
     align-items: center;
+    justify-self: end;
 }
 
 .btnLogoff {

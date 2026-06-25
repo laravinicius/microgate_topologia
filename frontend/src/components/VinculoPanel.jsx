@@ -5,10 +5,6 @@ function getRackNome(racks, rackId) {
   return rack ? rack.nome : '';
 }
 
-function formatNomeRack(nome) {
-  return nome.trim().replace(/^(.+?)(Rack)(\d+)$/i, (_, a, b, c) => a + ' | ' + b + ' ' + c);
-}
-
 function getPatchNome(racks, rackId, patchId) {
   const rack = racks.find(r => r.id === rackId);
   if (!rack) return '';
@@ -28,7 +24,7 @@ function buildBreadcrumb(racks, vinculo) {
   return parts.join(' → ');
 }
 
-export default function VinculoPanel({ vinculo, racks, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
+export default function VinculoPanel({ vinculo, racks, allMesas, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
   if (!vinculo) return null;
 
   const { etapa, rackId, patchId, pontoId, mesaId, mesaNome } = vinculo;
@@ -41,7 +37,7 @@ export default function VinculoPanel({ vinculo, racks, onSelectRack, onSelectPat
   const ocupadas = useMemo(() => {
     if (!rackId || !patchId) return new Set();
     const set = new Set();
-    for (const m of vinculo.mesas || []) {
+    for (const m of allMesas || []) {
       for (const p of m.pontos || []) {
         if (p.id === pontoId && m.id === mesaId) continue;
         if (p.rackId === rackId && p.patchId === patchId && p.porta) {
@@ -50,7 +46,7 @@ export default function VinculoPanel({ vinculo, racks, onSelectRack, onSelectPat
       }
     }
     return set;
-  }, [rackId, patchId, vinculo.mesas, pontoId, mesaId]);
+  }, [rackId, patchId, allMesas, pontoId, mesaId]);
 
   const portasLivres = useMemo(() => {
     if (!patchPanel) return [];
@@ -71,7 +67,7 @@ export default function VinculoPanel({ vinculo, racks, onSelectRack, onSelectPat
         <div className="vinculoConteudo">
           {ponto && ponto.rackId && ponto.patchId && ponto.porta && (
             <div className="vinculoVinculoAtual">
-              Vínculo atual: {formatNomeRack(getRackNome(racks, ponto.rackId))} | {getPatchNome(racks, ponto.rackId, ponto.patchId)} | Porta {ponto.porta}
+              Vínculo atual: P{ponto.id} | {getRackNome(racks, ponto.rackId)} | {getPatchNome(racks, ponto.rackId, ponto.patchId)} | Porta {ponto.porta}
             </div>
           )}
 

@@ -21,14 +21,15 @@ export function AuthProvider({ children }) {
       const me = await api.get('/api/auth/me');
       if (me.authenticated) {
         setUser(me.username);
-        const showSelection = sessionStorage.getItem('showCompanySelection') === 'true';
-        const empresa = showSelection ? null : (me.empresaId || null);
+        const showCompanySelection = sessionStorage.getItem('showCompanySelection') === 'true';
+        const empresa = showCompanySelection ? null : (me.empresaId || null);
         setEmpresaId(empresa);
         if (empresa) {
           const info = await api.get('/api/auth/session-info');
           setEmpresaNome(info.empresaNome || null);
-          setAndarId(info.andarId || null);
-          setAndarNome(info.andarNome || null);
+          const showAndarSelection = sessionStorage.getItem('showAndarSelection') === 'true';
+          setAndarId(showAndarSelection ? null : (info.andarId || null));
+          setAndarNome(showAndarSelection ? null : (info.andarNome || null));
         }
       } else {
         clearToken();
@@ -58,6 +59,7 @@ export function AuthProvider({ children }) {
     } catch {
     }
     sessionStorage.removeItem('showCompanySelection');
+    sessionStorage.removeItem('showAndarSelection');
     clearToken();
     setUser(null);
     setEmpresaId(null);
@@ -70,6 +72,7 @@ export function AuthProvider({ children }) {
     const data = await api.post('/api/auth/select-company', { empresaId: id });
     if (data.success) {
       sessionStorage.removeItem('showCompanySelection');
+      sessionStorage.removeItem('showAndarSelection');
       if (data.token) setToken(data.token);
       setEmpresaId(data.empresaId);
       setEmpresaNome(data.empresaNome || null);
@@ -82,6 +85,7 @@ export function AuthProvider({ children }) {
   const selectAndar = async (id) => {
     const data = await api.post('/api/auth/select-andar', { andarId: id });
     if (data.success) {
+      sessionStorage.removeItem('showAndarSelection');
       if (data.token) setToken(data.token);
       setAndarId(data.andarId);
       setAndarNome(data.andarNome || null);
@@ -90,6 +94,7 @@ export function AuthProvider({ children }) {
   };
 
   const clearAndar = () => {
+    sessionStorage.setItem('showAndarSelection', 'true');
     setAndarId(null);
     setAndarNome(null);
   };

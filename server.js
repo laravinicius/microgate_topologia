@@ -705,7 +705,11 @@ async function saveRacksData(racks, empresaId) {
 
 app.get('/api/data', requireAuth, requireEmpresa, async (req, res) => {
   try {
-    res.json(await loadData(req.user.empresaId, req.user.andarId));
+    const [data, allMesas] = await Promise.all([
+      loadData(req.user.empresaId, req.user.andarId),
+      loadAllMesas(req.user.empresaId)
+    ]);
+    res.json({ success: true, mesas: data.mesas, racks: data.racks, allMesas });
   } catch (error) {
     console.error('Erro ao carregar dados:', error);
     res.status(500).json({ success: false, message: 'Falha ao carregar dados do banco', error: error.message });
@@ -754,6 +758,25 @@ app.put('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
   } catch (error) {
     console.error('Erro ao salvar racks:', error);
     res.status(500).json({ success: false, message: 'Falha ao salvar racks no banco', error: error.message });
+  }
+});
+
+app.put('/api/racks/:id', requireAuth, requireEmpresa, async (req, res) => {
+  const { id } = req.params;
+  const { nome } = req.body;
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ success: false, message: 'Nome necessário' });
+  }
+  try {
+    await db.query('UPDATE racks SET nome = ? WHERE id = ? AND empresa_id = ?', [nome.trim(), id, req.user.empresaId]);
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ success: false, message: 'Nome já existe nesta empresa' });
+    }
+    console.error('Erro ao atualizar rack:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
   }
 });
 

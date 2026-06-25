@@ -55,7 +55,7 @@ function AppContent() {
         }
         return m;
       });
-      setData({ mesas, racks: res.racks || [] });
+      setData({ mesas, racks: res.racks || [], allMesas: res.allMesas || [] });
     } catch {
     }
   }, []);
@@ -158,7 +158,7 @@ function AppContent() {
       patchId: ponto.patchId || null,
       ponto,
       mesaNome: mesa.nome,
-      mesas: data.mesas
+      mesas: data.allMesas
     });
   }, [data]);
 
@@ -179,7 +179,7 @@ function AppContent() {
         const pp = rack?.patchPanels.find(p => p.id === patchId);
         if (!pp) return [];
         const ocupadas = new Set();
-        for (const m of data.mesas) {
+        for (const m of data.allMesas) {
           for (const p of m.pontos) {
             if (p.id === pontoId && m.id === mesaId) continue;
             if (p.rackId === rackId && p.patchId === patchId && p.porta) ocupadas.add(p.porta);
@@ -283,12 +283,11 @@ function AppContent() {
                 <div className="grade">
                   {mesa.pontos.map(p => {
                     const ocupado = p.rackId && p.patchId && p.porta;
-                    const formatNomeRack = (nome) => nome.trim().replace(/^(.+?)(Rack)(\d+)$/i, (_, a, b, c) => a + ' | ' + b + ' ' + c);
                     const resumo = ocupado
                       ? (() => {
                           const rack = data.racks.find(r => r.id === p.rackId);
                           const pp = rack?.patchPanels.find(pp => pp.id === p.patchId);
-                          return rack && pp ? `${formatNomeRack(rack.nome)} | ${pp.nome} | Porta ${p.porta}` : '';
+                          return rack && pp ? ` | ${rack.nome} | ${pp.nome} | Porta ${p.porta}` : '';
                         })()
                       : '';
                     return (
@@ -314,6 +313,7 @@ function AppContent() {
         <VinculoPanel
           vinculo={vinculo}
           racks={data.racks}
+          allMesas={data.allMesas}
           onSelectRack={handleSelectRackVinculo}
           onSelectPatch={handleSelectPatchVinculo}
           onSelectPorta={handleSelectPortaVinculo}

@@ -109,6 +109,20 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     }
   };
 
+  const handleEditRack = async (rack) => {
+    const nome = await prompt.text('Editar rack', 'Novo nome:', rack.nome);
+    if (!nome || nome.trim() === rack.nome.trim()) return;
+    try {
+      const data = await api.put(`/api/racks/${rack.id}`, { nome: nome.trim() });
+      if (data.success) {
+        success('Rack atualizado');
+        loadRacks();
+      }
+    } catch {
+      error('Erro ao atualizar rack');
+    }
+  };
+
   const handleApagarRack = async (rack) => {
     const confirmado = await prompt.confirm('Apagar rack', `Deseja apagar o rack ${rack.nome} e seus patch panels?`);
     if (!confirmado) return;
@@ -156,6 +170,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     <div className="companyScreenWrapper">
       <div className="companyScreen">
         <header>
+          <div className="headerLeft"></div>
           <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
           <div className="headerRight">
             <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
@@ -212,6 +227,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
                 racks={racks}
                 mesas={mesas}
                 onCriarRack={handleCriarRack}
+                onEditRack={handleEditRack}
                 onApagarRack={handleApagarRack}
                 onCriarPatchPanel={handleCriarPatchPanel}
                 onApagarPatchPanel={handleApagarPatchPanel}

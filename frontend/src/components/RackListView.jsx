@@ -22,7 +22,7 @@ function calcularConexoes(rack, pp, mesas) {
   return conexoes;
 }
 
-export default function RackListView({ racks, mesas, onCriarRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel }) {
+export default function RackListView({ racks, mesas, onCriarRack, onEditRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel }) {
   const [rackExpandido, setRackExpandido] = useState(null);
 
   return (
@@ -44,6 +44,7 @@ export default function RackListView({ racks, mesas, onCriarRack, onApagarRack, 
                 <span className="rackToggle">{expandido ? '▼' : '▶'}</span>
                 <h3>{rack.nome}</h3>
                 <div className="rackItemAcoes">
+                  <button className="btn-edit-company" onClick={(e) => { e.stopPropagation(); onEditRack(rack); }}>Editar</button>
                   <button className="botaoApagarRack" onClick={(e) => { e.stopPropagation(); onApagarRack(rack); }}>Apagar</button>
                 </div>
               </div>
