@@ -226,12 +226,14 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
               <RackListView
                 racks={racks}
                 mesas={mesas}
-                onCriarRack={handleCriarRack}
                 onEditRack={handleEditRack}
                 onApagarRack={handleApagarRack}
                 onCriarPatchPanel={handleCriarPatchPanel}
                 onApagarPatchPanel={handleApagarPatchPanel}
               />
+              <button className="btnNovoRack" onClick={handleCriarRack}>
+                + Rack
+              </button>
             </div>
           </div>
         </div>

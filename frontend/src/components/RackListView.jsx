@@ -27,10 +27,6 @@ export default function RackListView({ racks, mesas, onCriarRack, onEditRack, on
 
   return (
     <main className="rackListView">
-      <div className="rackListViewHeader">
-        <button className="btnNovoRack" onClick={onCriarRack}>+ Rack</button>
-      </div>
-
       {racks.length === 0 && (
         <div className="rackVazio">Nenhum rack cadastrado</div>
       )}

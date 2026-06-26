@@ -1856,6 +1856,11 @@ main {
     overflow: visible;
 }
 
+.dashboardColumn .btnNovoRack {
+    width: 100%;
+    margin-top: 12px;
+}
+
 .empty-message {
     color: var(--text-muted);
     font-style: italic;
