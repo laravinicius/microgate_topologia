@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 
-export default function Header({ onSync, syncing, onSwitchCompany, onVoltarAndares }) {
+export default function Header({ onSwitchCompany, onVoltarAndares }) {
   const { empresaNome, andarNome, andarId } = useAuth();
 
   return (
@@ -15,14 +15,6 @@ export default function Header({ onSync, syncing, onSwitchCompany, onVoltarAndar
       </div>
       <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
       <div className="headerRight">
-        <button
-          id="syncBtn"
-          onClick={onSync}
-          disabled={syncing}
-          title="Sincronizar"
-        >
-          {syncing ? '⟳ Sincronizando...' : '⟳ Sincronizar'}
-        </button>
         {andarId && (
           <button className="btnNav" onClick={onVoltarAndares}>
             ← Andares

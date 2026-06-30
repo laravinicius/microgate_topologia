@@ -780,6 +780,25 @@ app.put('/api/racks/:id', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
+app.put('/api/mesas/:id', requireAuth, requireEmpresa, async (req, res) => {
+  const { id } = req.params;
+  const { nome } = req.body;
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ success: false, message: 'Nome necessário' });
+  }
+  try {
+    await db.query('UPDATE mesas SET nome = ? WHERE id = ? AND empresa_id = ?', [nome.trim(), id, req.user.empresaId]);
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ success: false, message: 'Nome já existe nesta empresa' });
+    }
+    console.error('Erro ao atualizar mesa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
 // --- Em produção, servir o build do frontend ---
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'frontend', 'dist')));

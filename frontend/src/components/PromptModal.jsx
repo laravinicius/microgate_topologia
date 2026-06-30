@@ -30,8 +30,11 @@ export function PromptProvider({ children }) {
   const options = useCallback((title, message, opts) =>
     createPrompt({ type: 'options', title, message, options: opts }), [createPrompt]);
 
+  const form = useCallback((title, message, fields) =>
+    createPrompt({ type: 'form', title, message, fields }), [createPrompt]);
+
   return (
-    <PromptContext.Provider value={{ text, alert, confirm, options, close }}>
+    <PromptContext.Provider value={{ text, alert, confirm, options, form, close }}>
       {children}
       {prompt && <PromptDialog prompt={prompt} onClose={close} />}
     </PromptContext.Provider>
@@ -137,6 +140,40 @@ function PromptDialog({ prompt, onClose }) {
             </div>
             <div className="promptSistemaAcoes">
               <button type="button" className="promptCancelar" onClick={() => onClose(null)}>Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (prompt.type === 'form') {
+    const [values, setValues] = useState(
+      Object.fromEntries(prompt.fields.map(f => [f.key, f.initialValue ?? '']))
+    );
+
+    return (
+      <div className="promptSistemaOverlay" onClick={handleOverlayClick}>
+        <div className="promptSistema" role="dialog" aria-modal="true">
+          <form onSubmit={(e) => { e.preventDefault(); onClose(values); }}>
+            <h3>{prompt.title}</h3>
+            {prompt.message && <p>{prompt.message}</p>}
+            {prompt.fields.map(field => (
+              <div key={field.key} className="promptCampo">
+                <label>{field.label}</label>
+                <input
+                  type={field.type || 'text'}
+                  value={values[field.key]}
+                  onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
+                  autoFocus={field.key === prompt.fields[0].key}
+                  min={field.min}
+                  max={field.max}
+                />
+              </div>
+            ))}
+            <div className="promptSistemaAcoes">
+              <button type="button" className="promptCancelar" onClick={() => onClose(null)}>Cancelar</button>
+              <button type="submit" className="promptConfirmar">Salvar</button>
             </div>
           </form>
         </div>

@@ -243,29 +243,6 @@ header {
     transform: translateY(-1px);
 }
 
-#syncBtn {
-    padding: 8px 14px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-size: 0.85rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background var(--transition), transform var(--transition);
-    white-space: nowrap;
-}
-
-#syncBtn:hover {
-    background: var(--bg-surface-hover);
-    transform: translateY(-1px);
-}
-
-#syncBtn:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
 /* ===== AppContainer (Layout Centralizado) ===== */
 
 #appContainer {
@@ -836,6 +813,17 @@ main {
     transition: background var(--transition), transform var(--transition);
 }
 
+.botaoAcao {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.40);
+    color: #93c5fd;
+}
+
+.botaoAcao:hover {
+    background: rgba(59, 130, 246, 0.25);
+    transform: translateY(-1px);
+}
+
 .botaoPerigo {
     background: rgba(220, 38, 38, 0.15);
     border: 1px solid rgba(220, 38, 38, 0.40);
@@ -852,6 +840,8 @@ main {
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .ponto {
@@ -941,6 +931,17 @@ main {
     outline: none;
     border-color: rgba(255, 255, 255, 0.28);
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+}
+
+.promptCampo {
+    margin-bottom: 12px;
+}
+
+.promptCampo label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .promptSistemaAcoes {
@@ -1444,11 +1445,6 @@ main {
 
     .headerRight {
         gap: 4px;
-    }
-
-    #syncBtn {
-        padding: 6px 10px;
-        font-size: 0.75rem;
     }
 
     .andar-badge,

@@ -24,7 +24,7 @@ function buildBreadcrumb(racks, vinculo) {
   return parts.join(' → ');
 }
 
-export default function VinculoPanel({ vinculo, racks, allMesas, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
+export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
   if (!vinculo) return null;
 
   const { etapa, rackId, patchId, pontoId, mesaId, mesaNome } = vinculo;
@@ -37,7 +37,8 @@ export default function VinculoPanel({ vinculo, racks, allMesas, onSelectRack, o
   const ocupadas = useMemo(() => {
     if (!rackId || !patchId) return new Set();
     const set = new Set();
-    for (const m of allMesas || []) {
+    const todasMesas = mesasAtuais || allMesas || [];
+    for (const m of todasMesas) {
       for (const p of m.pontos || []) {
         if (p.id === pontoId && m.id === mesaId) continue;
         if (p.rackId === rackId && p.patchId === patchId && p.porta) {
@@ -46,7 +47,7 @@ export default function VinculoPanel({ vinculo, racks, allMesas, onSelectRack, o
       }
     }
     return set;
-  }, [rackId, patchId, allMesas, pontoId, mesaId]);
+  }, [rackId, patchId, allMesas, mesasAtuais, pontoId, mesaId]);
 
   const portasLivres = useMemo(() => {
     if (!patchPanel) return [];

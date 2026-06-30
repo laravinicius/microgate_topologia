@@ -12,13 +12,30 @@ import DetalhesPatch from './components/DetalhesPatch';
 import { api, getToken } from './api';
 
 const MESA_LARGURA = 240;
-const MESA_ALTURA = 480;
+const PONTOS_PADRAO = 8;
+const MESA_ALTURA_PADRAO = 480;
 const COLS = 2;
 
-function calcularPosicaoGrelha(indice) {
-  const col = indice % COLS;
-  const row = Math.floor(indice / COLS);
-  return { x: 20 + col * (MESA_LARGURA + 20), y: 20 + row * (MESA_ALTURA + 20) };
+function getMesaAltura(qtdPontos) {
+  const pontoAltura = 52;
+  const padding = 20;
+  const tituloAltura = 48;
+  return Math.max(120, Math.round(qtdPontos * pontoAltura + padding + tituloAltura));
+}
+
+function calcularPosicoes(mesas) {
+  const colY = [20, 20];
+  return mesas.map((m, i) => {
+    const col = i % COLS;
+    const h = getMesaAltura(m.pontos.length);
+    const y = colY[col];
+    colY[col] = y + h + 20;
+    return {
+      x: 20 + col * (MESA_LARGURA + 20),
+      y,
+      altura: h,
+    };
+  });
 }
 
 function AppContent() {
@@ -26,7 +43,7 @@ function AppContent() {
   const prompt = usePrompt();
 
   const [data, setData] = useState({ mesas: [], racks: [] });
-  const [syncing, setSyncing] = useState(false);
+
   const [vinculo, setVinculo] = useState(null);
   const [detalhesPatch, setDetalhesPatch] = useState(null);
 
@@ -48,12 +65,13 @@ function AppContent() {
   const carregarDadosServidor = useCallback(async () => {
     try {
       const res = await api.get('/api/data');
+      const posicoes = calcularPosicoes(res.mesas || []);
       const mesas = (res.mesas || []).map((m, i) => {
         if (!m.fixada) {
-          const pos = calcularPosicaoGrelha(i);
-          return { ...m, x: pos.x, y: pos.y };
+          const pos = posicoes[i];
+          return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
         }
-        return m;
+        return { ...m, _altura: getMesaAltura(m.pontos.length) };
       });
       setData({ mesas, racks: res.racks || [], allMesas: res.allMesas || [] });
     } catch {
@@ -71,12 +89,6 @@ function AppContent() {
     const available = mapaWidth - padding * 2;
     return Math.floor(Math.max(0, (available - maxRight) / 2));
   }, [data.mesas, mapaWidth]);
-
-  const handleSync = useCallback(async () => {
-    setSyncing(true);
-    await carregarDadosServidor();
-    setSyncing(false);
-  }, [carregarDadosServidor]);
 
   useEffect(() => {
     if (user && empresaId && andarId) {
@@ -106,40 +118,70 @@ function AppContent() {
   }, [empresaId, andarId, user, carregarDadosServidor]);
 
   const handleCriarMesa = useCallback(async () => {
-    const nome = await prompt.text('Nova mesa', 'Nome da mesa');
-    if (!nome) return;
+    const result = await prompt.form('Nova mesa', '', [
+      { key: 'nome', label: 'Nome da mesa', type: 'text', initialValue: '' },
+      { key: 'qtdPontos', label: 'Quantidade de pontos', type: 'number', initialValue: '8', min: 1, max: 255 }
+    ]);
+    if (!result || !result.nome) return;
+    const qtdPontos = Math.min(Math.max(Number(result.qtdPontos) || 8, 1), 255);
     const novaMesa = {
       id: Date.now(),
-      nome,
+      nome: result.nome,
       x: 0, y: 0,
-      fixada: true,
-      pontos: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null }))
+      fixada: false,
+      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null }))
     };
-    setData(prev => {
-      const mesas = [...prev.mesas, novaMesa];
-      const reorganizadas = mesas.map((m, i) => {
-        if (!m.fixada) {
-          const pos = calcularPosicaoGrelha(i);
-          return { ...m, x: pos.x, y: pos.y };
-        }
-        return m;
-      });
-      const newData = { ...prev, mesas: reorganizadas };
-      api.put('/api/data', newData);
-      return newData;
+    const prev = data;
+    const mesas = [...prev.mesas, novaMesa];
+    const posicoes = calcularPosicoes(mesas);
+    const reorganizadas = mesas.map((m, i) => {
+      if (!m.fixada) {
+        const pos = posicoes[i];
+        return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
+      }
+      return { ...m, _altura: getMesaAltura(m.pontos.length) };
     });
-  }, [prompt]);
+    const newData = { ...prev, mesas: reorganizadas };
+    setData(newData);
+    try {
+      await api.put('/api/data', newData);
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, prompt, carregarDadosServidor]);
+
+  const handleRenomearMesa = useCallback(async (mesa) => {
+    const result = await prompt.form('Renomear mesa', '', [
+      { key: 'nome', label: 'Nome da mesa', type: 'text', initialValue: mesa.nome }
+    ]);
+    if (!result || !result.nome) return;
+    const prev = data;
+    const mesas = prev.mesas.map(m => m.id === mesa.id ? { ...m, nome: result.nome } : m);
+    const newData = { ...prev, mesas };
+    setData(newData);
+    try {
+      await api.put(`/api/mesas/${mesa.id}`, { nome: result.nome });
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, prompt, carregarDadosServidor]);
 
   const handleApagarMesa = useCallback(async (mesa) => {
     const confirmado = await prompt.confirm('Apagar mesa', `Deseja apagar a mesa ${mesa.nome}?`);
     if (!confirmado) return;
-    setData(prev => {
-      const mesas = prev.mesas.filter(m => m.id !== mesa.id);
-      const newData = { ...prev, mesas };
-      api.put('/api/data', newData);
-      return newData;
-    });
-  }, [prompt]);
+    const prev = data;
+    const mesas = prev.mesas.filter(m => m.id !== mesa.id);
+    const newData = { ...prev, mesas };
+    setData(newData);
+    try {
+      await api.put('/api/data', newData);
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, prompt, carregarDadosServidor]);
 
 
   const handleIniciarVinculo = useCallback((mesaId, pontoId) => {
@@ -170,43 +212,48 @@ function AppContent() {
     setVinculo(prev => ({ ...prev, patchId, etapa: 'porta' }));
   }, []);
 
-  const handleSelectPortaVinculo = useCallback((porta) => {
-    setVinculo(prev => {
-      const { mesaId, pontoId, rackId, patchId } = prev;
+  const handleSelectPortaVinculo = useCallback(async (porta) => {
+    const current = vinculo;
+    if (!current) return;
+    const { mesaId, pontoId, rackId, patchId } = current;
 
-      const portasLivres = (() => {
-        const rack = data.racks.find(r => r.id === rackId);
-        const pp = rack?.patchPanels.find(p => p.id === patchId);
-        if (!pp) return [];
-        const ocupadas = new Set();
-        for (const m of data.allMesas) {
-          for (const p of m.pontos) {
-            if (p.id === pontoId && m.id === mesaId) continue;
-            if (p.rackId === rackId && p.patchId === patchId && p.porta) ocupadas.add(p.porta);
-          }
+    const portasLivres = (() => {
+      const rack = data.racks.find(r => r.id === rackId);
+      const pp = rack?.patchPanels.find(p => p.id === patchId);
+      if (!pp) return [];
+      const ocupadas = new Set();
+      const todasMesas = data.allMesas || data.mesas;
+      for (const m of todasMesas) {
+        for (const p of m.pontos) {
+          if (p.id === pontoId && m.id === mesaId) continue;
+          if (p.rackId === rackId && p.patchId === patchId && p.porta) ocupadas.add(p.porta);
         }
-        return Array.from({ length: pp.portas }, (_, i) => i + 1).filter(p => !ocupadas.has(p));
-      })();
-
-      if (!portasLivres.includes(porta)) {
-        prompt.alert('Porta indisponível', 'Essa porta não está mais livre.');
-        return prev;
       }
+      return Array.from({ length: pp.portas }, (_, i) => i + 1).filter(p => !ocupadas.has(p));
+    })();
 
-      setData(d => {
-        const mesas = d.mesas.map(m =>
-          m.id === mesaId
-            ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId, patchId, porta } : p) }
-            : m
-        );
-        const newData = { ...d, mesas };
-        api.put('/api/data', newData);
-        return newData;
-      });
+    if (!portasLivres.includes(porta)) {
+      await prompt.alert('Porta indisponível', 'Essa porta não está mais livre.');
+      return;
+    }
 
-      return null;
-    });
-  }, [data, prompt]);
+    setVinculo(null);
+
+    const mesas = data.mesas.map(m =>
+      m.id === mesaId
+        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId, patchId, porta } : p) }
+        : m
+    );
+    const newData = { ...data, mesas };
+    setData(newData);
+
+    try {
+      await api.put('/api/data', newData);
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, vinculo, prompt, carregarDadosServidor]);
 
   const handleVoltarVinculo = useCallback(() => {
     setVinculo(prev => {
@@ -218,22 +265,28 @@ function AppContent() {
 
   const handleCancelarVinculo = useCallback(() => setVinculo(null), []);
 
-  const handleDesvincular = useCallback(() => {
-    setVinculo(prev => {
-      if (!prev) return null;
-      setData(d => {
-        const mesas = d.mesas.map(m =>
-          m.id === prev.mesaId
-            ? { ...m, pontos: m.pontos.map(p => p.id === prev.pontoId ? { ...p, rackId: null, patchId: null, porta: null } : p) }
-            : m
-        );
-        const newData = { ...d, mesas };
-        api.put('/api/data', newData);
-        return newData;
-      });
-      return null;
-    });
-  }, []);
+  const handleDesvincular = useCallback(async () => {
+    const current = vinculo;
+    if (!current) return;
+    const { mesaId, pontoId } = current;
+
+    setVinculo(null);
+
+    const mesas = data.mesas.map(m =>
+      m.id === mesaId
+        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId: null, patchId: null, porta: null } : p) }
+        : m
+    );
+    const newData = { ...data, mesas };
+    setData(newData);
+
+    try {
+      await api.put('/api/data', newData);
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, vinculo, carregarDadosServidor]);
 
   const handleSwitchCompany = useCallback(() => {
     sessionStorage.setItem('showCompanySelection', 'true');
@@ -256,8 +309,6 @@ function AppContent() {
   return (
     <div id="appContainer">
       <Header
-        onSync={handleSync}
-        syncing={syncing}
         onSwitchCompany={handleSwitchCompany}
         onVoltarAndares={clearAndar}
       />
@@ -267,16 +318,19 @@ function AppContent() {
             <button id="novaMesa" onClick={handleCriarMesa}>+ Mesa</button>
           </div>
           <div id="mapa" ref={mapaRef}>
-            {data.mesas.map(mesa => (
+            {data.mesas.map(mesa => {
+              const altura = mesa._altura || getMesaAltura(mesa.pontos.length);
+              return (
               <div
                 key={mesa.id}
                 className="mesa"
-                style={{ left: (mesa.x + offsetX) + 'px', top: mesa.y + 'px' }}
+                style={{ left: (mesa.x + offsetX) + 'px', top: mesa.y + 'px', height: altura + 'px' }}
                 data-mesa-id={mesa.id}
               >
                 <div className="tituloMesa">
                   <strong>{mesa.nome}</strong>
                   <div className="acoesMesa">
+                    <button className="botaoAcao" onClick={() => handleRenomearMesa(mesa)}>Editar</button>
                     <button className="botaoPerigo" onClick={() => handleApagarMesa(mesa)}>Apagar</button>
                   </div>
                 </div>
@@ -303,8 +357,9 @@ function AppContent() {
                     );
                   })}
                 </div>
-              </div>
-            ))}
+               </div>
+              );
+            })}
           </div>
         </main>
       </div>
@@ -314,6 +369,7 @@ function AppContent() {
           vinculo={vinculo}
           racks={data.racks}
           allMesas={data.allMesas}
+          mesasAtuais={data.mesas}
           onSelectRack={handleSelectRackVinculo}
           onSelectPatch={handleSelectPatchVinculo}
           onSelectPorta={handleSelectPortaVinculo}
