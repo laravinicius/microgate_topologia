@@ -129,7 +129,7 @@ function AppContent() {
       nome: result.nome,
       x: 0, y: 0,
       fixada: false,
-      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null }))
+      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null, atencao: false }))
     };
     const prev = data;
     const mesas = [...prev.mesas, novaMesa];
@@ -183,6 +183,23 @@ function AppContent() {
     }
   }, [data, prompt, carregarDadosServidor]);
 
+
+  const handleToggleAtencao = useCallback(async (mesaId, pontoId) => {
+    const mesas = data.mesas.map(m =>
+      m.id === mesaId
+        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, atencao: !p.atencao } : p) }
+        : m
+    );
+    const newData = { ...data, mesas };
+    setData(newData);
+
+    try {
+      await api.put('/api/data', newData);
+      await carregarDadosServidor();
+    } catch {
+      await carregarDadosServidor();
+    }
+  }, [data, carregarDadosServidor]);
 
   const handleIniciarVinculo = useCallback((mesaId, pontoId) => {
     const mesa = data.mesas.find(m => m.id === mesaId);
@@ -347,7 +364,7 @@ function AppContent() {
                     return (
                       <div
                         key={p.id}
-                        className={`ponto${ocupado ? ' ocupado' : ''}`}
+                        className={`ponto${ocupado ? ' ocupado' : ''}${p.atencao ? ' atencao' : ''}`}
                         onClick={() => handleIniciarVinculo(mesa.id, p.id)}
                         title={resumo}
                       >
@@ -376,6 +393,7 @@ function AppContent() {
           onVoltar={handleVoltarVinculo}
           onCancelar={handleCancelarVinculo}
           onDesvincular={handleDesvincular}
+          onToggleAtencao={handleToggleAtencao}
         />
       )}
 

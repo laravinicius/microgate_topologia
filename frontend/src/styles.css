@@ -707,6 +707,12 @@ header {
     color: #86efac;
 }
 
+.portItem.attention {
+    background: rgba(234, 179, 8, 0.20);
+    border: 1px solid rgba(234, 179, 8, 0.40);
+    color: #fde68a;
+}
+
 .portNum {
     font-size: 0.85rem;
     font-weight: 700;
@@ -870,6 +876,18 @@ main {
     background: rgba(22, 163, 74, 0.20);
     border-color: rgba(22, 163, 74, 0.40);
     color: #86efac;
+}
+
+.ponto.atencao {
+    background: rgba(234, 179, 8, 0.20);
+    border-color: rgba(234, 179, 8, 0.40);
+    color: #fde68a;
+}
+
+.ponto.ocupado.atencao {
+    background: rgba(234, 179, 8, 0.25);
+    border-color: rgba(234, 179, 8, 0.50);
+    color: #fde68a;
 }
 
 /* ===== Prompts / Modals ===== */
@@ -1183,6 +1201,17 @@ main {
 
 .vinculoDesvincular:hover {
     background: rgba(220, 38, 38, 0.25);
+    transform: translateY(-1px);
+}
+
+.vinculoAtencao {
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.40);
+    color: #fde68a;
+}
+
+.vinculoAtencao:hover {
+    background: rgba(234, 179, 8, 0.25);
     transform: translateY(-1px);
 }
 

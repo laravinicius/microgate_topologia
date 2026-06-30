@@ -6,18 +6,20 @@ function calcularConexoes(rack, pp, mesas) {
     let mesaNome = null;
     let mesaAndarNome = null;
     let pontoId = null;
+    let atencao = false;
     for (const mesa of mesas) {
       for (const ponto of mesa.pontos) {
         if (ponto.rackId === rack.id && ponto.patchId === pp.id && ponto.porta === porta) {
           mesaNome = mesa.nome;
           mesaAndarNome = mesa.andarNome || '';
           pontoId = ponto.id;
+          atencao = Boolean(ponto.atencao);
           break;
         }
       }
       if (mesaNome) break;
     }
-    conexoes.push({ porta, mesaNome, mesaAndarNome, pontoId });
+    conexoes.push({ porta, mesaNome, mesaAndarNome, pontoId, atencao });
   }
   return conexoes;
 }
@@ -65,7 +67,7 @@ export default function RackListView({ racks, mesas, onCriarRack, onEditRack, on
                               {conexoes.map(cx => (
                                 <div
                                   key={cx.porta}
-                                  className={`portItem ${cx.mesaNome ? 'used' : 'free'}`}
+                                  className={`portItem ${cx.mesaNome ? 'used' : 'free'}${cx.atencao ? ' attention' : ''}`}
                                 >
                                   <span className="portNum">{cx.porta}</span>
                                   <span className="portLabel">

@@ -24,7 +24,7 @@ function buildBreadcrumb(racks, vinculo) {
   return parts.join(' → ');
 }
 
-export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
+export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular, onToggleAtencao }) {
   if (!vinculo) return null;
 
   const { etapa, rackId, patchId, pontoId, mesaId, mesaNome } = vinculo;
@@ -112,7 +112,12 @@ export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, on
 
         <div className="vinculoAcoes">
           {ponto && ponto.rackId && ponto.patchId && ponto.porta && (
-            <button className="vinculoDesvincular" onClick={onDesvincular}>Limpar</button>
+            <>
+              <button className="vinculoDesvincular" onClick={onDesvincular}>Limpar</button>
+              <button className="vinculoAtencao" onClick={() => onToggleAtencao(mesaId, pontoId)}>
+                {ponto.atencao ? 'Remover destaque' : 'Destacar'}
+              </button>
+            </>
           )}
           {etapa !== 'rack' && (
             <button className="vinculoVoltar" onClick={onVoltar}>Voltar</button>

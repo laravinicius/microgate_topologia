@@ -11,18 +11,20 @@ export default function DetalhesPatch({ detalhes, racks, onClose }) {
     let mesaNome = null;
     let mesaAndarNome = null;
     let pontoId = null;
+    let atencao = false;
     for (const mesa of detalhes.mesas || []) {
       for (const ponto of mesa.pontos || []) {
         if (ponto.rackId === rackId && ponto.patchId === patchId && ponto.porta === porta) {
           mesaNome = mesa.nome;
           mesaAndarNome = mesa.andarNome || '';
           pontoId = ponto.id;
+          atencao = Boolean(ponto.atencao);
           break;
         }
       }
       if (mesaNome) break;
     }
-    conexoes.push({ porta, mesaNome, mesaAndarNome, pontoId });
+    conexoes.push({ porta, mesaNome, mesaAndarNome, pontoId, atencao });
   }
 
   return (
@@ -44,7 +46,7 @@ export default function DetalhesPatch({ detalhes, racks, onClose }) {
                   <td>{cx.porta}</td>
                   <td>
                     {cx.mesaNome
-                      ? `${cx.mesaAndarNome} - ${cx.mesaNome} - P${cx.pontoId}`
+                      ? `${cx.mesaAndarNome} - ${cx.mesaNome} - P${cx.pontoId}${cx.atencao ? ' ⚠' : ''}`
                       : <span className="detalhesPatchLivre">Livre</span>
                     }
                   </td>

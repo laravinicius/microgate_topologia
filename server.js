@@ -457,12 +457,13 @@ function normalizeData(data) {
       x: Number.isFinite(Number(mesa.x)) ? Number(mesa.x) : 100,
       y: Number.isFinite(Number(mesa.y)) ? Number(mesa.y) : 100,
       fixada: toBool(mesa.fixada),
-      pontos: Array.isArray(mesa.pontos) ? mesa.pontos.map(ponto => ({
-        id: Number(ponto.id),
-        rackId: toNullableNumber(ponto.rackId),
-        patchId: toNullableNumber(ponto.patchId),
-        porta: toNullableNumber(ponto.porta)
-      })) : []
+        pontos: Array.isArray(mesa.pontos) ? mesa.pontos.map(ponto => ({
+          id: Number(ponto.id),
+          rackId: toNullableNumber(ponto.rackId),
+          patchId: toNullableNumber(ponto.patchId),
+          porta: toNullableNumber(ponto.porta),
+          atencao: Boolean(ponto.atencao)
+        })) : []
     })),
     racks: racks.map(rack => ({
       id: Number(rack.id),
@@ -552,7 +553,7 @@ async function loadData(empresaId, andarId) {
       [empresaId, andarId]
     );
     const [pontosRows] = await db.query(
-      'SELECT mesa_id, numero, rack_id, patch_panel_id, porta FROM mesa_pontos WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ? AND andar_id = ?) ORDER BY numero',
+      'SELECT mesa_id, numero, rack_id, patch_panel_id, porta, atencao FROM mesa_pontos WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ? AND andar_id = ?) ORDER BY numero',
       [empresaId, andarId]
     );
 
@@ -573,7 +574,8 @@ async function loadData(empresaId, andarId) {
         id: Number(row.numero),
         rackId: row.rack_id === null ? null : Number(row.rack_id),
         patchId: row.patch_panel_id === null ? null : Number(row.patch_panel_id),
-        porta: row.porta === null ? null : Number(row.porta)
+        porta: row.porta === null ? null : Number(row.porta),
+        atencao: Boolean(row.atencao)
       });
     });
   }
@@ -592,7 +594,7 @@ async function loadAllMesas(empresaId) {
     [empresaId]
   );
   const [pontosRows] = await db.query(
-    `SELECT mesa_id, numero, rack_id, patch_panel_id, porta
+    `SELECT mesa_id, numero, rack_id, patch_panel_id, porta, atencao
      FROM mesa_pontos
      WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ?)
      ORDER BY numero`,
@@ -616,7 +618,8 @@ async function loadAllMesas(empresaId) {
       id: Number(row.numero),
       rackId: row.rack_id === null ? null : Number(row.rack_id),
       patchId: row.patch_panel_id === null ? null : Number(row.patch_panel_id),
-      porta: row.porta === null ? null : Number(row.porta)
+      porta: row.porta === null ? null : Number(row.porta),
+      atencao: Boolean(row.atencao)
     });
   });
 
@@ -633,7 +636,7 @@ async function saveMesasData(mesas, empresaId, andarId) {
     for (const mesa of mesas) {
       await connection.query('INSERT INTO mesas (id, nome, x, y, fixada, empresa_id, andar_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [mesa.id, mesa.nome, mesa.x, mesa.y, mesa.fixada ? 1 : 0, empresaId, andarId]);
       for (const ponto of mesa.pontos) {
-        await connection.query('INSERT INTO mesa_pontos (id, mesa_id, numero, rack_id, patch_panel_id, porta) VALUES (?, ?, ?, ?, ?, ?)', [(mesa.id * 100) + ponto.id, mesa.id, ponto.id, ponto.rackId, ponto.patchId, ponto.porta]);
+        await connection.query('INSERT INTO mesa_pontos (id, mesa_id, numero, rack_id, patch_panel_id, porta, atencao) VALUES (?, ?, ?, ?, ?, ?, ?)', [(mesa.id * 100) + ponto.id, mesa.id, ponto.id, ponto.rackId, ponto.patchId, ponto.porta, ponto.atencao ? 1 : 0]);
       }
     }
 
