@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { usePrompt } from './PromptModal';
 import RackListView from './RackListView';
+import MapEditor from './MapEditor';
 import { api } from '../api';
 
 export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
@@ -10,6 +11,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
   const { success, error } = useNotification();
   const prompt = usePrompt();
 
+  const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
   const [andares, setAndares] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -175,6 +177,10 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     }
   };
 
+  if (showMap) {
+    return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} />;
+  }
+
   return (
     <div className="companyScreenWrapper">
       <div className="companyScreen">
@@ -182,6 +188,8 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
           <div className="headerLeft"></div>
           <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
           <div className="headerRight">
+            <button className="btnNav btn-map-view" onClick={() => setShowMap('view')}>👁 Ver Mapa</button>
+            <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
             <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
             <button className="btnLogoff" onClick={logout}>Sair</button>
           </div>

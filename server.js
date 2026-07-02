@@ -627,6 +627,49 @@ async function loadAllMesas(empresaId) {
   return mesas;
 }
 
+async function loadAllMesasByAndar(empresaId, andarId) {
+  const [mesasRows] = await db.query(
+    `SELECT m.id, m.nome, m.x, m.y, m.fixada,
+            COALESCE(a.nome, '') AS andar_nome
+     FROM mesas m
+     LEFT JOIN andares a ON a.id = m.andar_id
+     WHERE m.empresa_id = ? AND m.andar_id = ?
+     ORDER BY m.created_at, m.id`,
+    [empresaId, andarId]
+  );
+  const [pontosRows] = await db.query(
+    `SELECT mesa_id, numero, rack_id, patch_panel_id, porta, atencao
+     FROM mesa_pontos
+     WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ? AND andar_id = ?)
+     ORDER BY numero`,
+    [empresaId, andarId]
+  );
+
+  const mesasById = new Map();
+  const mesas = mesasRows.map(row => {
+    const mesa = {
+      id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y),
+      fixada: Boolean(row.fixada), andarNome: row.andar_nome, pontos: []
+    };
+    mesasById.set(mesa.id, mesa);
+    return mesa;
+  });
+
+  pontosRows.forEach(row => {
+    const mesa = mesasById.get(Number(row.mesa_id));
+    if (!mesa) return;
+    mesa.pontos.push({
+      id: Number(row.numero),
+      rackId: row.rack_id === null ? null : Number(row.rack_id),
+      patchId: row.patch_panel_id === null ? null : Number(row.patch_panel_id),
+      porta: row.porta === null ? null : Number(row.porta),
+      atencao: Boolean(row.atencao)
+    });
+  });
+
+  return mesas;
+}
+
 async function saveMesasData(mesas, empresaId, andarId) {
   const connection = await db.getConnection();
   try {
@@ -720,11 +763,31 @@ app.get('/api/data', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
+app.post('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
+  const { nome } = req.body;
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ success: false, message: 'Nome do rack necessario' });
+  }
+  try {
+    const [maxRows] = await db.query('SELECT MAX(id) as maxId FROM racks');
+    const newId = (maxRows[0].maxId || 0) + 1;
+    await db.query('INSERT INTO racks (id, nome, empresa_id) VALUES (?, ?, ?)', [newId, nome.trim(), req.user.empresaId]);
+    res.json({ success: true, rack: { id: newId, nome: nome.trim() } });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ success: false, message: 'Rack ja existe nesta empresa' });
+    }
+    console.error('Erro ao criar rack:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
 app.get('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
   try {
+    const { andarId } = req.query;
     const [racksData, mesas] = await Promise.all([
       loadData(req.user.empresaId, null),
-      loadAllMesas(req.user.empresaId)
+      andarId ? loadAllMesasByAndar(req.user.empresaId, Number(andarId)) : loadAllMesas(req.user.empresaId)
     ]);
     res.json({ success: true, racks: racksData.racks, mesas });
   } catch (error) {
@@ -965,6 +1028,106 @@ function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/<
 </script>
 </body>
 </html>`);
+});
+
+// --- Mapa: CRUD de elementos ---
+app.get('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    const { andarId } = req.query;
+    let query = 'SELECT * FROM map_elements WHERE empresa_id = ?';
+    const params = [req.user.empresaId];
+    if (andarId) {
+      query += ' AND andar_id = ?';
+      params.push(Number(andarId));
+    } else {
+      query += ' AND andar_id IS NULL';
+    }
+    query += ' ORDER BY ordem, id';
+    const [rows] = await db.query(query, params);
+    res.json({ success: true, elements: rows.map(r => ({ ...r, dados_json: r.dados_json ? JSON.parse(r.dados_json) : null })) });
+  } catch (error) {
+    console.error('Erro ao carregar elementos do mapa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.post('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json } = req.body;
+    const [result] = await db.query(
+      'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.empresaId, andarId || null, tipo || 'objeto', nome || '', Number(x) || 0, Number(y) || 0, Number(largura) || 100, Number(altura) || 60, cor || '#374151', Number(rotacao) || 0, Number(ordem) || 0, dados_json ? JSON.stringify(dados_json) : null]
+    );
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true, id: result.insertId });
+  } catch (error) {
+    console.error('Erro ao criar elemento do mapa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// Bulk save MUST be before :id route so Express matches it first
+app.put('/api/map-elements/bulk', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    const { elements, andarId } = req.body;
+    if (!Array.isArray(elements)) return res.status(400).json({ success: false, message: 'elements deve ser um array' });
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      if (andarId) {
+        await connection.query('DELETE FROM map_elements WHERE empresa_id = ? AND andar_id = ?', [req.user.empresaId, Number(andarId)]);
+      } else {
+        await connection.query('DELETE FROM map_elements WHERE empresa_id = ? AND andar_id IS NULL', [req.user.empresaId]);
+      }
+      for (const el of elements) {
+        await connection.query(
+          'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [req.user.empresaId, el.andarId || null, el.tipo || 'objeto', el.nome || '', Number(el.x) || 0, Number(el.y) || 0, Number(el.largura) || 100, Number(el.altura) || 60, el.cor || '#374151', Number(el.rotacao) || 0, Number(el.ordem) || 0, el.dados_json ? JSON.stringify(el.dados_json) : null]
+        );
+      }
+      await connection.commit();
+      broadcastSSE({ type: 'update', timestamp: Date.now() });
+      res.json({ success: true });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Erro ao salvar elementos do mapa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.put('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json } = req.body;
+    const [existing] = await db.query('SELECT * FROM map_elements WHERE id = ? AND empresa_id = ?', [id, req.user.empresaId]);
+    if (existing.length === 0) return res.status(404).json({ success: false, message: 'Elemento não encontrado' });
+    const old = existing[0];
+    await db.query(
+      'UPDATE map_elements SET andar_id = ?, tipo = ?, nome = ?, x = ?, y = ?, largura = ?, altura = ?, cor = ?, rotacao = ?, ordem = ?, dados_json = ? WHERE id = ? AND empresa_id = ?',
+      [andarId !== undefined ? (andarId || null) : old.andar_id, tipo || old.tipo, nome !== undefined ? nome : old.nome, Number(x) ?? old.x, Number(y) ?? old.y, Number(largura) || old.largura, Number(altura) || old.altura, cor || old.cor, Number(rotacao) || old.rotacao, Number(ordem) ?? old.ordem, dados_json !== undefined ? (dados_json ? JSON.stringify(dados_json) : null) : old.dados_json, id, req.user.empresaId]
+    );
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao atualizar elemento do mapa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+app.delete('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    await db.query('DELETE FROM map_elements WHERE id = ? AND empresa_id = ?', [req.params.id, req.user.empresaId]);
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao deletar elemento do mapa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
 });
 
 // --- Em produção, servir o build do frontend ---

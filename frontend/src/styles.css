@@ -2370,3 +2370,694 @@ main {
     background: var(--blue-hover);
     transform: translateY(-1px);
 }
+
+/* ============================================
+   MAP EDITOR
+   ============================================ */
+
+.map-editor-wrapper {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-base);
+}
+
+/* Header */
+.map-editor-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: var(--bg-panel-strong);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.map-btn-voltar {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    transition: background var(--transition);
+}
+
+.map-btn-voltar:hover {
+    background: var(--bg-surface-hover);
+}
+
+.map-title {
+    font-weight: 600;
+    font-size: 1rem;
+    white-space: nowrap;
+}
+
+/* Andar Tabs */
+.map-andar-tabs {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    overflow-x: auto;
+    padding: 0 8px;
+}
+
+.map-andar-tab {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition: all var(--transition);
+}
+
+.map-andar-tab:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text);
+}
+
+.map-andar-tab.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: white;
+    font-weight: 600;
+}
+
+.map-andar-tab-disabled {
+    color: var(--text-muted);
+    padding: 6px 14px;
+    font-size: 0.85rem;
+}
+
+/* Header Actions */
+.map-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.map-save-status {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+}
+
+.map-save-status.saved {
+    color: var(--green);
+}
+
+.map-save-status.saving {
+    color: var(--text-muted);
+}
+
+.map-save-status.unsaved {
+    color: #f59e0b;
+}
+
+.map-btn-icon {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition);
+}
+
+.map-btn-icon:hover {
+    background: var(--bg-surface-hover);
+}
+
+/* Body */
+.map-editor-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Canvas Wrapper */
+.map-canvas-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+    background:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: rgba(15, 15, 16, 0.95);
+}
+
+.map-canvas-wrapper:active {
+    cursor: grabbing;
+}
+
+/* Canvas */
+.map-canvas {
+    position: relative;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* Map Elements */
+.map-element {
+    position: absolute;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: box-shadow var(--transition), border-color var(--transition);
+    border: 2px solid transparent;
+    user-select: none;
+    overflow: hidden;
+}
+
+.map-element:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    z-index: 5;
+}
+
+.map-element.selected {
+    border: 2px dashed #60a5fa;
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2);
+    z-index: 10;
+}
+
+.map-element-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    text-align: center;
+    padding: 2px 4px;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.map-element-type {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Resize Handles */
+.map-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: white;
+    border: 2px solid #3b82f6;
+    border-radius: 50%;
+    z-index: 20;
+}
+
+.map-handle-tl { top: -5px; left: -5px; cursor: nw-resize; }
+.map-handle-tr { top: -5px; right: -5px; cursor: ne-resize; }
+.map-handle-bl { bottom: -5px; left: -5px; cursor: sw-resize; }
+.map-handle-br { bottom: -5px; right: -5px; cursor: se-resize; }
+
+/* Selection box (drag-to-select) */
+.map-selection-box {
+    position: absolute;
+    border: 2px dashed #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* Toolbar */
+.map-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.map-toolbar-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.map-btn-add {
+    background: var(--bg-panel-strong);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.map-btn-add:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+}
+
+/* Mesa Menu */
+.map-mesa-menu {
+    background: var(--bg-panel-strong);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    min-width: 220px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+}
+
+.map-mesa-menu h4 {
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: var(--text-soft);
+}
+
+.map-mesa-menu-section {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 8px 0 4px;
+}
+
+.map-mesa-item {
+    display: block;
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+    margin: 4px 0;
+    transition: background var(--transition);
+}
+
+.map-mesa-item:hover {
+    background: var(--bg-surface-hover);
+}
+
+.map-input {
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    margin: 4px 0;
+}
+
+.map-input:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+.map-btn-save {
+    background: var(--green);
+    border: none;
+    color: white;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 6px;
+    width: 100%;
+    transition: background var(--transition);
+}
+
+.map-btn-save:hover {
+    background: var(--green-hover);
+}
+
+/* Properties Panel */
+.map-properties {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 260px;
+    background: var(--bg-panel-strong);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    z-index: 50;
+    box-shadow: var(--shadow);
+}
+
+.map-properties h3 {
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+    color: var(--text);
+}
+
+.map-prop-group {
+    margin-bottom: 10px;
+}
+
+.map-prop-group label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.map-prop-group input[type="text"],
+.map-prop-group input[type="number"] {
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+
+.map-prop-group input[type="color"] {
+    width: 100%;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: var(--bg-surface);
+}
+
+.map-prop-group input[type="range"] {
+    width: 100%;
+    accent-color: var(--blue);
+}
+
+.map-prop-value {
+    font-size: 0.85rem;
+    color: var(--text-soft);
+}
+
+.map-prop-row {
+    display: flex;
+    gap: 8px;
+}
+
+.map-prop-row .map-prop-group {
+    flex: 1;
+}
+
+.map-btn-delete {
+    width: 100%;
+    background: var(--danger);
+    border: none;
+    color: white;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 12px;
+    transition: background var(--transition);
+}
+
+.map-btn-delete:hover {
+    background: var(--danger-hover);
+}
+
+/* Zoom Controls */
+.map-zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-panel-strong);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    z-index: 50;
+    box-shadow: var(--shadow);
+}
+
+.map-zoom-controls button {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition);
+}
+
+.map-zoom-controls button:hover {
+    background: var(--bg-surface-hover);
+}
+
+.map-zoom-value {
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    min-width: 48px;
+    text-align: center;
+}
+
+.map-btn-reset {
+    font-size: 1rem !important;
+}
+
+.map-rotate-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.map-rotate-btn {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: background var(--transition);
+}
+
+.map-rotate-btn:hover {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+}
+
+.map-mode-badge {
+    font-size: 0.8rem;
+    color: var(--green);
+    font-weight: 600;
+}
+
+/* Dashboard map buttons */
+.btn-map-view {
+    background: var(--blue) !important;
+    color: white !important;
+}
+
+.btn-map-edit {
+    background: var(--green) !important;
+    color: white !important;
+}
+
+/* Map Info Modal */
+.map-info-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.map-info-panel {
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    min-width: 500px;
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.map-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.map-info-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+.map-info-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+}
+
+.map-info-close:hover {
+    background: var(--bg-surface);
+    color: var(--text);
+}
+
+.map-info-back {
+    background: none;
+    border: none;
+    color: var(--blue);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-bottom: 8px;
+    transition: color var(--transition);
+}
+
+.map-info-back:hover {
+    color: var(--blue-hover);
+}
+
+.map-info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.map-info-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.map-info-table td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+}
+
+.map-info-row-empty td {
+    color: var(--text-muted);
+}
+
+.map-info-row-atencao {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.map-info-status-ok {
+    color: var(--green);
+    font-weight: 500;
+}
+
+.map-info-status-atencao {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+.map-info-status-livre {
+    color: var(--text-muted);
+}
+
+.map-info-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.map-info-patch-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.map-info-patch-list-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.map-info-patch-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.map-info-patch-item:hover {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: white;
+}
+
+.map-info-patch-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.map-info-patch-portas {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.map-info-patch-item:hover .map-info-patch-portas {
+    color: rgba(255, 255, 255, 0.7);
+}
