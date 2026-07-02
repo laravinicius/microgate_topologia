@@ -705,12 +705,24 @@ header {
     background: rgba(22, 163, 74, 0.20);
     border: 1px solid rgba(22, 163, 74, 0.40);
     color: #86efac;
+    cursor: pointer;
+}
+
+.portItem.used:hover {
+    background: rgba(22, 163, 74, 0.30);
+    border-color: rgba(22, 163, 74, 0.55);
 }
 
 .portItem.attention {
     background: rgba(234, 179, 8, 0.20);
     border: 1px solid rgba(234, 179, 8, 0.40);
     color: #fde68a;
+    cursor: pointer;
+}
+
+.portItem.attention:hover {
+    background: rgba(234, 179, 8, 0.30);
+    border-color: rgba(234, 179, 8, 0.55);
 }
 
 .portNum {
@@ -759,6 +771,7 @@ header {
     flex: 1;
     position: relative;
     overflow: auto;
+    min-height: 0;
 }
 
 main {
@@ -791,11 +804,12 @@ main {
 
 .tituloMesa {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     padding: 12px 14px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-surface-soft);
+    gap: 8px;
 }
 
 .tituloMesa strong {
@@ -845,8 +859,7 @@ main {
     display: grid;
     grid-template-columns: 1fr;
     gap: 4px;
-    padding: 10px;
-    overflow-y: auto;
+    padding: 10px 10px 14px;
     overflow-x: hidden;
 }
 
@@ -878,17 +891,7 @@ main {
     color: #86efac;
 }
 
-.ponto.atencao {
-    background: rgba(234, 179, 8, 0.20);
-    border-color: rgba(234, 179, 8, 0.40);
-    color: #fde68a;
-}
 
-.ponto.ocupado.atencao {
-    background: rgba(234, 179, 8, 0.25);
-    border-color: rgba(234, 179, 8, 0.50);
-    color: #fde68a;
-}
 
 /* ===== Prompts / Modals ===== */
 
@@ -1201,17 +1204,6 @@ main {
 
 .vinculoDesvincular:hover {
     background: rgba(220, 38, 38, 0.25);
-    transform: translateY(-1px);
-}
-
-.vinculoAtencao {
-    background: rgba(234, 179, 8, 0.15);
-    border: 1px solid rgba(234, 179, 8, 0.40);
-    color: #fde68a;
-}
-
-.vinculoAtencao:hover {
-    background: rgba(234, 179, 8, 0.25);
     transform: translateY(-1px);
 }
 
@@ -2268,4 +2260,113 @@ main {
     margin: 0 auto;
     min-height: 100vh;
     padding: 32px 0 48px;
+}
+
+/* ===== QR Code Modal ===== */
+
+.qrOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 15, 16, 0.65);
+    backdrop-filter: blur(8px);
+}
+
+.qrModal {
+    width: min(380px, 100%);
+    border-radius: var(--radius-lg);
+    background: var(--bg-panel);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    overflow: hidden;
+}
+
+.qrHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface-soft);
+}
+
+.qrHeader h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.qrClose {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: color var(--transition);
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.qrClose:hover {
+    color: var(--text);
+}
+
+.qrBody {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.qrImage {
+    border-radius: var(--radius-sm);
+    background: white;
+    padding: 12px;
+    max-width: 100%;
+}
+
+.qrLoading {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    padding: 40px 0;
+}
+
+.qrError {
+    color: #fca5a5;
+    font-size: 0.88rem;
+    padding: 20px 0;
+    text-align: center;
+}
+
+.qrHint {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin: 0;
+    text-align: center;
+}
+
+.qrDownload {
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
+    background: rgba(37, 99, 235, 0.92);
+    border: 1px solid rgba(147, 197, 253, 0.42);
+    color: white;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), transform var(--transition);
+}
+
+.qrDownload:hover {
+    background: var(--blue-hover);
+    transform: translateY(-1px);
 }

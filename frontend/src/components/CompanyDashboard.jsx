@@ -166,6 +166,15 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     }
   };
 
+  const handleTogglePortaAtencao = async (rackId, patchId, porta) => {
+    try {
+      await api.put('/api/ponto/toggle-atencao', { rackId, patchId, porta });
+      await loadRacks();
+    } catch {
+      error('Erro ao atualizar destaque');
+    }
+  };
+
   return (
     <div className="companyScreenWrapper">
       <div className="companyScreen">
@@ -230,6 +239,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
                 onApagarRack={handleApagarRack}
                 onCriarPatchPanel={handleCriarPatchPanel}
                 onApagarPatchPanel={handleApagarPatchPanel}
+                onTogglePortaAtencao={handleTogglePortaAtencao}
               />
               <button className="btnNovoRack" onClick={handleCriarRack}>
                 + Rack

@@ -9,33 +9,99 @@ import Header from './components/Header';
 
 import VinculoPanel from './components/VinculoPanel';
 import DetalhesPatch from './components/DetalhesPatch';
+import QrCodeModal from './components/QrCodeModal';
 import { api, getToken } from './api';
 
 const MESA_LARGURA = 240;
 const PONTOS_PADRAO = 8;
 const MESA_ALTURA_PADRAO = 480;
 const COLS = 2;
+const MESA_GAP = 20;
+const MESA_PADDING = 20;
 
 function getMesaAltura(qtdPontos) {
-  const pontoAltura = 52;
-  const padding = 20;
-  const tituloAltura = 48;
-  return Math.max(120, Math.round(qtdPontos * pontoAltura + padding + tituloAltura));
+  const pontoAltura = 48;
+  const gap = 4;
+  const paddingGrade = 24;
+  const tituloAltura = 68;
+  return Math.max(120, qtdPontos * pontoAltura + (qtdPontos - 1) * gap + paddingGrade + tituloAltura);
+}
+
+function getMesaX(col) {
+  return MESA_PADDING + col * (MESA_LARGURA + MESA_GAP);
+}
+
+function checkOverlap(x1, y1, h1, x2, y2, h2) {
+  if (x1 + MESA_LARGURA <= x2 || x2 + MESA_LARGURA <= x1) return false;
+  if (y1 + h1 <= y2 || y2 + h2 <= y1) return false;
+  return true;
+}
+
+function encontrarYLivre(col, yInicial, mesasOcupadas, h) {
+  let y = yInicial;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const m of mesasOcupadas) {
+      const colM = Math.round((m.x - MESA_PADDING) / (MESA_LARGURA + MESA_GAP));
+      if (colM !== col) continue;
+      if (y + h > m.y && m.y + m.altura > y) {
+        y = m.y + m.altura + MESA_GAP;
+        changed = true;
+      }
+    }
+  }
+  return y;
 }
 
 function calcularPosicoes(mesas) {
+  const fixadas = mesas.filter(m => m.fixada).map(m => ({
+    x: m.x, y: m.y, altura: getMesaAltura(m.pontos.length), fixada: true
+  }));
+
+  const naoFixadas = mesas.filter(m => !m.fixada);
   const colY = [20, 20];
-  return mesas.map((m, i) => {
-    const col = i % COLS;
+  const posicoes = [];
+
+  for (const m of naoFixadas) {
+    const col = posicoes.length % COLS;
     const h = getMesaAltura(m.pontos.length);
-    const y = colY[col];
-    colY[col] = y + h + 20;
-    return {
-      x: 20 + col * (MESA_LARGURA + 20),
-      y,
-      altura: h,
-    };
-  });
+    let y = colY[col];
+
+    y = encontrarYLivre(col, y, fixadas, h);
+
+    const x = getMesaX(col);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const fp of fixadas) {
+        if (checkOverlap(x, y, h, fp.x, fp.y, fp.altura)) {
+          y = fp.y + fp.altura + MESA_GAP;
+          changed = true;
+        }
+      }
+      for (const pp of posicoes) {
+        if (checkOverlap(x, y, h, pp.x, pp.y, pp.altura)) {
+          y = pp.y + pp.altura + MESA_GAP;
+          changed = true;
+        }
+      }
+    }
+
+    colY[col] = y + h + MESA_GAP;
+    posicoes.push({ x, y, altura: h });
+  }
+
+  const resultado = [];
+  let naoFixIdx = 0;
+  for (const m of mesas) {
+    if (m.fixada) {
+      resultado.push({ x: m.x, y: m.y, altura: getMesaAltura(m.pontos.length) });
+    } else {
+      resultado.push(posicoes[naoFixIdx++]);
+    }
+  }
+  return resultado;
 }
 
 function AppContent() {
@@ -46,6 +112,7 @@ function AppContent() {
 
   const [vinculo, setVinculo] = useState(null);
   const [detalhesPatch, setDetalhesPatch] = useState(null);
+  const [qrMesaId, setQrMesaId] = useState(null);
 
   const mapaRef = useRef(null);
   const [mapaWidth, setMapaWidth] = useState(0);
@@ -67,11 +134,8 @@ function AppContent() {
       const res = await api.get('/api/data');
       const posicoes = calcularPosicoes(res.mesas || []);
       const mesas = (res.mesas || []).map((m, i) => {
-        if (!m.fixada) {
-          const pos = posicoes[i];
-          return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
-        }
-        return { ...m, _altura: getMesaAltura(m.pontos.length) };
+        const pos = posicoes[i];
+        return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
       });
       setData({ mesas, racks: res.racks || [], allMesas: res.allMesas || [] });
     } catch {
@@ -135,11 +199,8 @@ function AppContent() {
     const mesas = [...prev.mesas, novaMesa];
     const posicoes = calcularPosicoes(mesas);
     const reorganizadas = mesas.map((m, i) => {
-      if (!m.fixada) {
-        const pos = posicoes[i];
-        return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
-      }
-      return { ...m, _altura: getMesaAltura(m.pontos.length) };
+      const pos = posicoes[i];
+      return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
     });
     const newData = { ...prev, mesas: reorganizadas };
     setData(newData);
@@ -182,24 +243,6 @@ function AppContent() {
       await carregarDadosServidor();
     }
   }, [data, prompt, carregarDadosServidor]);
-
-
-  const handleToggleAtencao = useCallback(async (mesaId, pontoId) => {
-    const mesas = data.mesas.map(m =>
-      m.id === mesaId
-        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, atencao: !p.atencao } : p) }
-        : m
-    );
-    const newData = { ...data, mesas };
-    setData(newData);
-
-    try {
-      await api.put('/api/data', newData);
-      await carregarDadosServidor();
-    } catch {
-      await carregarDadosServidor();
-    }
-  }, [data, carregarDadosServidor]);
 
   const handleIniciarVinculo = useCallback((mesaId, pontoId) => {
     const mesa = data.mesas.find(m => m.id === mesaId);
@@ -336,18 +379,18 @@ function AppContent() {
           </div>
           <div id="mapa" ref={mapaRef}>
             {data.mesas.map(mesa => {
-              const altura = mesa._altura || getMesaAltura(mesa.pontos.length);
               return (
               <div
                 key={mesa.id}
                 className="mesa"
-                style={{ left: (mesa.x + offsetX) + 'px', top: mesa.y + 'px', height: altura + 'px' }}
+                style={{ left: (mesa.x + offsetX) + 'px', top: mesa.y + 'px' }}
                 data-mesa-id={mesa.id}
               >
                 <div className="tituloMesa">
                   <strong>{mesa.nome}</strong>
                   <div className="acoesMesa">
                     <button className="botaoAcao" onClick={() => handleRenomearMesa(mesa)}>Editar</button>
+                    <button className="botaoAcao" onClick={() => setQrMesaId(mesa.id)}>QR Code</button>
                     <button className="botaoPerigo" onClick={() => handleApagarMesa(mesa)}>Apagar</button>
                   </div>
                 </div>
@@ -364,7 +407,7 @@ function AppContent() {
                     return (
                       <div
                         key={p.id}
-                        className={`ponto${ocupado ? ' ocupado' : ''}${p.atencao ? ' atencao' : ''}`}
+                        className={`ponto${ocupado ? ' ocupado' : ''}`}
                         onClick={() => handleIniciarVinculo(mesa.id, p.id)}
                         title={resumo}
                       >
@@ -393,7 +436,6 @@ function AppContent() {
           onVoltar={handleVoltarVinculo}
           onCancelar={handleCancelarVinculo}
           onDesvincular={handleDesvincular}
-          onToggleAtencao={handleToggleAtencao}
         />
       )}
 
@@ -402,6 +444,13 @@ function AppContent() {
           detalhes={detalhesPatch}
           racks={data.racks}
           onClose={() => setDetalhesPatch(null)}
+        />
+      )}
+
+      {qrMesaId && (
+        <QrCodeModal
+          mesaId={qrMesaId}
+          onClose={() => setQrMesaId(null)}
         />
       )}
     </div>

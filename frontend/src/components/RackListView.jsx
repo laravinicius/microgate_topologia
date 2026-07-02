@@ -24,7 +24,7 @@ function calcularConexoes(rack, pp, mesas) {
   return conexoes;
 }
 
-export default function RackListView({ racks, mesas, onCriarRack, onEditRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel }) {
+export default function RackListView({ racks, mesas, onEditRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel, onTogglePortaAtencao }) {
   const [rackExpandido, setRackExpandido] = useState(null);
 
   return (
@@ -68,6 +68,7 @@ export default function RackListView({ racks, mesas, onCriarRack, onEditRack, on
                                 <div
                                   key={cx.porta}
                                   className={`portItem ${cx.mesaNome ? 'used' : 'free'}${cx.atencao ? ' attention' : ''}`}
+                                  onClick={cx.mesaNome ? () => onTogglePortaAtencao(rack.id, pp.id, cx.porta) : undefined}
                                 >
                                   <span className="portNum">{cx.porta}</span>
                                   <span className="portLabel">

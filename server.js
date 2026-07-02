@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const QRCode = require('qrcode');
 const db = require('./db');
 
 const app = express();
@@ -800,6 +801,170 @@ app.put('/api/mesas/:id', requireAuth, requireEmpresa, async (req, res) => {
     console.error('Erro ao atualizar mesa:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });
   }
+});
+
+app.put('/api/ponto/toggle-atencao', requireAuth, requireEmpresa, async (req, res) => {
+  const { rackId, patchId, porta } = req.body;
+  if (rackId == null || patchId == null || porta == null) {
+    return res.status(400).json({ success: false, message: 'rackId, patchId e porta são obrigatórios' });
+  }
+  try {
+    const [rows] = await db.query(
+      'SELECT mp.id FROM mesa_pontos mp JOIN mesas m ON mp.mesa_id = m.id WHERE mp.rack_id = ? AND mp.patch_panel_id = ? AND mp.porta = ? AND m.empresa_id = ?',
+      [rackId, patchId, porta, req.user.empresaId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Ponto não encontrado' });
+    }
+    for (const row of rows) {
+      await db.query('UPDATE mesa_pontos SET atencao = NOT atencao WHERE id = ?', [row.id]);
+    }
+    broadcastSSE({ type: 'update', timestamp: Date.now() });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao toggle atencao:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- QR Code: gerar imagem PNG ---
+app.get('/api/mesas/:id/qr', requireAuth, requireEmpresa, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.query(
+      'SELECT id FROM mesas WHERE id = ? AND empresa_id = ?',
+      [id, req.user.empresaId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Mesa não encontrada' });
+    }
+    const baseUrl = process.env.QR_BASE_URL || 'http://topologia.microgateinformatica.com.br';
+    const url = `${baseUrl}/mesa/${id}`;
+    const pngBuffer = await QRCode.toBuffer(url, { width: 400, margin: 2 });
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Disposition': `inline; filename="mesa-${id}-qr.png"`
+    });
+    res.send(pngBuffer);
+  } catch (error) {
+    console.error('Erro ao gerar QR code:', error);
+    res.status(500).json({ success: false, message: 'Erro ao gerar QR code' });
+  }
+});
+
+// --- QR Code: dados públicos da mesa (sem auth) ---
+app.get('/api/mesas/por-id/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [mesaRows] = await db.query(
+      `SELECT m.id, m.nome, e.nome AS empresa_nome, a.nome AS andar_nome
+       FROM mesas m
+       JOIN empresas e ON e.id = m.empresa_id
+       LEFT JOIN andares a ON a.id = m.andar_id
+       WHERE m.id = ?`,
+      [id]
+    );
+    if (mesaRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Mesa não encontrada' });
+    }
+
+    const [pontosRows] = await db.query(
+      `SELECT mp.numero AS ponto, r.nome AS rack_nome, pp.nome AS patch_nome, mp.porta, mp.atencao
+       FROM mesa_pontos mp
+       LEFT JOIN racks r ON r.id = mp.rack_id
+       LEFT JOIN patch_panels pp ON pp.id = mp.patch_panel_id
+       WHERE mp.mesa_id = ?
+       ORDER BY mp.numero`,
+      [id]
+    );
+
+    const pontos = pontosRows.map(row => ({
+      ponto: Number(row.ponto),
+      rackNome: row.rack_nome || null,
+      patchNome: row.patch_nome || null,
+      porta: row.porta || null,
+      atencao: Boolean(row.atencao),
+      vinculado: !!(row.rack_nome && row.patch_nome && row.porta)
+    }));
+
+    res.json({
+      success: true,
+      mesa: {
+        id: mesaRows[0].id,
+        nome: mesaRows[0].nome,
+        empresaNome: mesaRows[0].empresa_nome,
+        andarNome: mesaRows[0].andar_nome || null,
+        pontos
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar mesa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- Página pública da mesa (target do QR code) ---
+app.get('/mesa/:id', (req, res) => {
+  const mesaId = req.params.id;
+  res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mesa</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e17;color:#e0e6ed;padding:16px}
+.card{background:#111827;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #1e293b}
+h1{font-size:22px;margin-bottom:4px}
+.sub{color:#94a3b8;font-size:14px;margin-bottom:0}
+.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;margin-top:8px}
+.badge-empresa{background:#1e3a5f;color:#60a5fa}
+.badge-andar{background:#1e3a5f;color:#60a5fa}
+table{width:100%;border-collapse:collapse}
+th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #1e293b}
+td{padding:10px 12px;border-bottom:1px solid #1e293b;font-size:14px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.dot-on{background:#22c55e}
+.dot-off{background:#475569}
+.dot-atn{background:#f59e0b}
+.link{color:#60a5fa;font-size:13px}
+.loading{text-align:center;padding:60px 20px;color:#64748b}
+.error{text-align:center;padding:60px 20px;color:#ef4444}
+</style>
+</head>
+<body>
+<div id="app">
+<div class="loading">Carregando...</div>
+</div>
+<script>
+(async()=>{
+const id=${mesaId};
+const el=document.getElementById('app');
+try{
+const res=await fetch('/api/mesas/por-id/'+id);
+const json=await res.json();
+if(!json.success||!json.mesa){el.innerHTML='<div class="error">Mesa não encontrada</div>';return}
+const m=json.mesa;
+let h='<div class="card"><h1>'+esc(m.nome)+'</h1>';
+if(m.empresaNome)h+='<span class="badge badge-empresa">'+esc(m.empresaNome)+'</span>';
+if(m.andarNome)h+='<span class="badge badge-andar">'+esc(m.andarNome)+'</span>';
+h+='</div>';
+h+='<div class="card"><table><thead><tr><th>Ponto</th><th>Status</th><th>Vínculo</th></tr></thead><tbody>';
+for(const p of m.pontos){
+const dot=p.vinculado?(p.atencao?'dot-on dot-atn':'dot-on'):'dot-off';
+const status=p.vinculado?(p.atencao?'Atenção':'Vinculado'):'Livre';
+const link=p.vinculado?esc(p.rackNome)+' / '+esc(p.patchNome)+' #'+p.porta:'—';
+h+='<tr><td>P'+p.ponto+'</td><td><span class="dot '+dot+'"></span>'+status+'</td><td class="link">'+link+'</td></tr>';
+}
+h+='</tbody></table></div>';
+el.innerHTML=h;
+}catch(e){el.innerHTML='<div class="error">Erro ao carregar dados</div>'}
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+})();
+</script>
+</body>
+</html>`);
 });
 
 // --- Em produção, servir o build do frontend ---
