@@ -54,6 +54,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
 
   const canvasRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const hasAutoZoomed = useRef(false);
 
   // --- Selection box (drag-to-select) ---
   const [selectionBox, setSelectionBox] = useState(null);
@@ -110,6 +111,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
   }, [loadAndares]);
 
   useEffect(() => {
+    hasAutoZoomed.current = false;
     if (activeAndarId !== null) {
       loadElements(activeAndarId);
       loadMesas(activeAndarId);
@@ -118,6 +120,35 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
       loadMesas();
     }
   }, [activeAndarId, loadElements, loadMesas]);
+
+  // Auto zoom to fit when elements load
+  useEffect(() => {
+    if (elements.length > 0 && !hasAutoZoomed.current) {
+      hasAutoZoomed.current = true;
+      const timer = setTimeout(() => {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (!rect || elements.length === 0) return;
+        const minX = Math.min(...elements.map(e => e.x));
+        const minY = Math.min(...elements.map(e => e.y));
+        const maxX = Math.max(...elements.map(e => e.x + e.largura));
+        const maxY = Math.max(...elements.map(e => e.y + e.altura));
+        const padding = 80;
+        const contentWidth = maxX - minX + padding * 2;
+        const contentHeight = maxY - minY + padding * 2;
+        const scaleX = rect.width / contentWidth;
+        const scaleY = rect.height / contentHeight;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(scaleX, scaleY)));
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        setZoom(newZoom);
+        setPan({
+          x: rect.width / 2 - centerX * newZoom,
+          y: rect.height / 2 - centerY * newZoom,
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [elements]);
 
   // --- Save ---
   const saveElements = useCallback(async () => {
