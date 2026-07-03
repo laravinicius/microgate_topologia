@@ -9,7 +9,8 @@ import Header from './components/Header';
 
 import VinculoPanel from './components/VinculoPanel';
 import DetalhesPatch from './components/DetalhesPatch';
-import QrCodeModal from './components/QrCodeModal';
+import PublicMapViewer from './components/PublicMapViewer';
+import QRCodeModal from './components/QRCodeModal';
 import { api, getToken } from './api';
 
 const MESA_LARGURA = 240;
@@ -105,14 +106,14 @@ function calcularPosicoes(mesas) {
 }
 
 function AppContent() {
-  const { user, loading, empresaId, andarId, clearAndar, clearEmpresa } = useAuth();
+  const { user, loading, empresaId, empresaNome, andarId, clearAndar, clearEmpresa } = useAuth();
   const prompt = usePrompt();
 
   const [data, setData] = useState({ mesas: [], racks: [] });
 
   const [vinculo, setVinculo] = useState(null);
   const [detalhesPatch, setDetalhesPatch] = useState(null);
-  const [qrMesaId, setQrMesaId] = useState(null);
+  const [qrcodeMesa, setQrcodeMesa] = useState(null);
 
   const mapaRef = useRef(null);
   const [mapaWidth, setMapaWidth] = useState(0);
@@ -193,7 +194,7 @@ function AppContent() {
       nome: result.nome,
       x: 0, y: 0,
       fixada: false,
-      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null, atencao: false }))
+      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null, atencao: false })),
     };
     const prev = data;
     const mesas = [...prev.mesas, novaMesa];
@@ -388,11 +389,11 @@ function AppContent() {
               >
                 <div className="tituloMesa">
                   <strong>{mesa.nome}</strong>
-                  <div className="acoesMesa">
-                    <button className="botaoAcao" onClick={() => handleRenomearMesa(mesa)}>Editar</button>
-                    <button className="botaoAcao" onClick={() => setQrMesaId(mesa.id)}>QR Code</button>
-                    <button className="botaoPerigo" onClick={() => handleApagarMesa(mesa)}>Apagar</button>
-                  </div>
+                    <div className="acoesMesa">
+                      <button className="botaoAcao" onClick={() => handleRenomearMesa(mesa)}>Editar</button>
+                      <button className="botaoAcao" onClick={() => setQrcodeMesa(mesa)}>QR</button>
+                      <button className="botaoPerigo" onClick={() => handleApagarMesa(mesa)}>Apagar</button>
+                    </div>
                 </div>
                 <div className="grade">
                   {mesa.pontos.map(p => {
@@ -447,23 +448,69 @@ function AppContent() {
         />
       )}
 
-      {qrMesaId && (
-        <QrCodeModal
-          mesaId={qrMesaId}
-          onClose={() => setQrMesaId(null)}
+      {qrcodeMesa && (
+        <QRCodeModal
+          mesa={qrcodeMesa}
+          empresaSlug={empresaNome}
+          andarId={andarId}
+          onClose={() => setQrcodeMesa(null)}
         />
       )}
     </div>
   );
 }
 
+function PublicRouteDetector({ children }) {
+  const [publicEmpresa, setPublicEmpresa] = useState(null);
+  const [publicMesaId, setPublicMesaId] = useState(null);
+  const [publicAndarId, setPublicAndarId] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/([^/]+)$/);
+    if (!match) {
+      setReady(true);
+      return;
+    }
+    const slug = match[1];
+    const reserved = ['mesa', 'api', 'img'];
+    if (reserved.includes(slug)) {
+      setReady(true);
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const mesaParam = params.get('mesa');
+    const andarParam = params.get('andar');
+    if (mesaParam) setPublicMesaId(Number(mesaParam));
+    if (andarParam) setPublicAndarId(Number(andarParam));
+    fetch(`/api/public/empresa?nome=${encodeURIComponent(slug)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setPublicEmpresa(data.empresa.nome);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setReady(true));
+  }, []);
+
+  if (!ready) return null;
+  if (publicEmpresa) {
+    return <PublicMapViewer empresaSlug={publicEmpresa} mesaId={publicMesaId} andarId={publicAndarId} />;
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <NotificationProvider>
       <PromptProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <PublicRouteDetector>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </PublicRouteDetector>
       </PromptProvider>
     </NotificationProvider>
   );

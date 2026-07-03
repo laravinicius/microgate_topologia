@@ -51,6 +51,8 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoElement, setInfoElement] = useState(null);
   const [infoPatchPanel, setInfoPatchPanel] = useState(null);
+  const [rackConnections, setRackConnections] = useState([]);
+  const [rackConnectionsLoading, setRackConnectionsLoading] = useState(false);
 
   const canvasRef = useRef(null);
   const saveTimerRef = useRef(null);
@@ -98,6 +100,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
         const normalized = (data.elements || []).map(el => ({
           ...el,
           andarId: el.andar_id ?? el.andarId ?? null,
+          font_size: el.font_size ?? 12,
         }));
         setElements(normalized);
       }
@@ -149,6 +152,44 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
       return () => clearTimeout(timer);
     }
   }, [elements]);
+
+  // --- Info modal for read-only mode ---
+  const openInfoModal = useCallback((el) => {
+    setInfoElement(el);
+    setInfoPatchPanel(null);
+    setShowInfoModal(true);
+  }, []);
+
+  const closeInfoModal = useCallback(() => {
+    setShowInfoModal(false);
+    setInfoElement(null);
+    setInfoPatchPanel(null);
+    setRackConnections([]);
+  }, []);
+
+  const selectPatchPanel = useCallback(async (pp) => {
+    setInfoPatchPanel(pp);
+    setRackConnectionsLoading(true);
+    setRackConnections([]);
+    try {
+      const rack = racks.find(r => r.nome === infoElement?.nome);
+      if (rack) {
+        const data = await api.get(`/api/rack-connections?rackId=${rack.id}&patchId=${pp.id}`);
+        if (data.success) {
+          setRackConnections(data.connections || []);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRackConnectionsLoading(false);
+    }
+  }, [racks, infoElement]);
+
+  const backToRack = useCallback(() => {
+    setInfoPatchPanel(null);
+    setRackConnections([]);
+  }, []);
 
   // --- Save ---
   const saveElements = useCallback(async () => {
@@ -221,6 +262,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
       cor: def.cor,
       rotacao: 0,
       ordem: elements.length,
+      font_size: 12,
       dados_json: entityId ? (tipo === 'mesa' ? { mesaId: entityId } : { rackId: entityId }) : null,
     };
     addElement(el);
@@ -386,6 +428,9 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
 
   const handleElementMouseDown = useCallback((e, el, handle) => {
     if (readOnly) return;
+    if (e.shiftKey && !handle) {
+      return;
+    }
     e.stopPropagation();
     e.preventDefault();
 
@@ -503,27 +548,6 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
   // --- Selected element ---
   const selected = selectedIds.length > 0 ? elements.find(e => e.id === selectedIds[0]) : null;
 
-  // --- Info modal for read-only mode ---
-  const openInfoModal = useCallback((el) => {
-    setInfoElement(el);
-    setInfoPatchPanel(null);
-    setShowInfoModal(true);
-  }, []);
-
-  const closeInfoModal = useCallback(() => {
-    setShowInfoModal(false);
-    setInfoElement(null);
-    setInfoPatchPanel(null);
-  }, []);
-
-  const selectPatchPanel = useCallback((pp) => {
-    setInfoPatchPanel(pp);
-  }, []);
-
-  const backToRack = useCallback(() => {
-    setInfoPatchPanel(null);
-  }, []);
-
   // --- Create element from existing mesa ---
   const createFromMesa = useCallback((mesa) => {
     createNewElement('mesa', mesa.nome, mesa.id);
@@ -640,8 +664,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
                 onMouseDown={(e) => handleElementMouseDown(e, el, null)}
                 onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(el); }}
               >
-                <div className="map-element-label">{el.nome}</div>
-                <div className="map-element-type">{el.tipo}</div>
+                <div className="map-element-label" style={{ fontSize: `${el.font_size || 12}px` }}>{el.nome}</div>
 
                 {/* Resize handles */}
                 {!readOnly && selectedIds.includes(el.id) && (
@@ -758,6 +781,24 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
                   onClick={() => updateElement(selected.id, { rotacao: ((selected.rotacao || 0) + 90) % 360 })}
                 >
                   90° →
+                </button>
+              </div>
+            </div>
+            <div className="map-prop-group">
+              <label>Tamanho da Fonte</label>
+              <div className="map-rotate-controls">
+                <button
+                  className="map-rotate-btn"
+                  onClick={() => selectedIds.forEach(id => updateElement(id, { font_size: Math.max(8, (elements.find(e => e.id === id)?.font_size || 12) - 1) }))}
+                >
+                  A-
+                </button>
+                <span className="map-prop-value">{selected.font_size || 12}px</span>
+                <button
+                  className="map-rotate-btn"
+                  onClick={() => selectedIds.forEach(id => updateElement(id, { font_size: Math.min(36, (elements.find(e => e.id === id)?.font_size || 12) + 1) }))}
+                >
+                  A+
                 </button>
               </div>
             </div>
@@ -969,7 +1010,9 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
                       </div>
                       <button className="map-info-close" onClick={closeInfoModal}>✕</button>
                     </div>
-                    {patchPanel ? (
+                    {rackConnectionsLoading ? (
+                      <div className="map-info-empty">Carregando...</div>
+                    ) : patchPanel ? (
                       <table className="map-info-table">
                         <thead>
                           <tr>
@@ -981,31 +1024,16 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
                         </thead>
                         <tbody>
                           {Array.from({ length: patchPanel.portas }, (_, i) => i + 1).map(porta => {
-                            let mesaNome = null;
-                            let pontoId = null;
-                            let atencao = false;
-                            let andarNome = null;
-                            for (const mesa of mesas) {
-                              for (const ponto of mesa.pontos || []) {
-                                if (ponto.patchId === patchPanel.id && ponto.porta === porta) {
-                                  mesaNome = mesa.nome;
-                                  pontoId = ponto.id;
-                                  atencao = ponto.atencao;
-                                  andarNome = mesa.andarNome || null;
-                                  break;
-                                }
-                              }
-                              if (mesaNome) break;
-                            }
+                            const conn = rackConnections.find(c => c.porta === porta);
                             return (
-                              <tr key={porta} className={!mesaNome ? 'map-info-row-empty' : atencao ? 'map-info-row-atencao' : ''}>
+                              <tr key={porta} className={!conn ? 'map-info-row-empty' : conn.atencao ? 'map-info-row-atencao' : ''}>
                                 <td>{porta}</td>
-                                <td>{mesaNome ? `${andarNome ? andarNome + ' / ' : ''}${mesaNome}` : '-'}</td>
-                                <td>{pontoId ? `P${pontoId}` : '-'}</td>
+                                <td>{conn ? `${conn.andarNome ? conn.andarNome + ' / ' : ''}${conn.mesaNome}` : '-'}</td>
+                                <td>{conn ? `P${conn.pontoId}` : '-'}</td>
                                 <td>
-                                  {mesaNome
-                                    ? <span className={atencao ? 'map-info-status-atencao' : 'map-info-status-ok'}>
-                                        {atencao ? '⚠ Atenção' : '✓ Vinculado'}
+                                  {conn
+                                    ? <span className={conn.atencao ? 'map-info-status-atencao' : 'map-info-status-ok'}>
+                                        {conn.atencao ? '⚠ Atenção' : '✓ Vinculado'}
                                       </span>
                                     : <span className="map-info-status-livre">Livre</span>
                                   }

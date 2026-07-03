@@ -2262,115 +2262,6 @@ main {
     padding: 32px 0 48px;
 }
 
-/* ===== QR Code Modal ===== */
-
-.qrOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10002;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    background: rgba(15, 15, 16, 0.65);
-    backdrop-filter: blur(8px);
-}
-
-.qrModal {
-    width: min(380px, 100%);
-    border-radius: var(--radius-lg);
-    background: var(--bg-panel);
-    backdrop-filter: blur(18px);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
-    color: var(--text);
-    overflow: hidden;
-}
-
-.qrHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-surface-soft);
-}
-
-.qrHeader h3 {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text);
-    margin: 0;
-}
-
-.qrClose {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 1.4rem;
-    cursor: pointer;
-    transition: color var(--transition);
-    padding: 0 4px;
-    line-height: 1;
-}
-
-.qrClose:hover {
-    color: var(--text);
-}
-
-.qrBody {
-    padding: 24px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-}
-
-.qrImage {
-    border-radius: var(--radius-sm);
-    background: white;
-    padding: 12px;
-    max-width: 100%;
-}
-
-.qrLoading {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    padding: 40px 0;
-}
-
-.qrError {
-    color: #fca5a5;
-    font-size: 0.88rem;
-    padding: 20px 0;
-    text-align: center;
-}
-
-.qrHint {
-    color: var(--text-muted);
-    font-size: 0.82rem;
-    margin: 0;
-    text-align: center;
-}
-
-.qrDownload {
-    padding: 10px 24px;
-    border-radius: var(--radius-sm);
-    background: rgba(37, 99, 235, 0.92);
-    border: 1px solid rgba(147, 197, 253, 0.42);
-    color: white;
-    font: inherit;
-    font-size: 0.88rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background var(--transition), transform var(--transition);
-}
-
-.qrDownload:hover {
-    background: var(--blue-hover);
-    transform: translateY(-1px);
-}
-
 /* ============================================
    MAP EDITOR
    ============================================ */
@@ -3060,4 +2951,313 @@ main {
 
 .map-info-patch-item:hover .map-info-patch-portas {
     color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- QR Code Modal --- */
+.qrcode-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+
+.qrcode-panel {
+    background: var(--bg-surface, #1e1e2e);
+    border: 1px solid var(--border, #333);
+    border-radius: var(--radius-md, 12px);
+    padding: 0;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.qrcode-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border, #333);
+}
+
+.qrcode-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text, #fff);
+    font-weight: 600;
+}
+
+.qrcode-close {
+    background: none;
+    border: none;
+    color: var(--text-muted, #888);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.qrcode-close:hover {
+    color: var(--text, #fff);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.qrcode-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    min-height: 380px;
+}
+
+.qrcode-canvas,
+.qrcode-image {
+    border-radius: 8px;
+    max-width: 100%;
+    height: auto;
+}
+
+.qrcode-loading {
+    color: var(--text-muted, #888);
+    font-size: 0.95rem;
+}
+
+.qrcode-error {
+    color: #ef4444;
+    font-size: 0.95rem;
+}
+
+.qrcode-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border, #333);
+}
+
+.qrcode-download {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--green, #10b981);
+    border: none;
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.qrcode-download:hover {
+    opacity: 0.9;
+}
+
+.qrcode-cancel {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-surface, #1e1e2e);
+    border: 1px solid var(--border, #333);
+    color: var(--text, #fff);
+    font: inherit;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.qrcode-cancel:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* --- QR Code Batch Print --- */
+.qrcode-panel-wide {
+    max-width: 95vw;
+    width: 95vw;
+    max-height: 95vh;
+    overflow: hidden;
+}
+
+.qrcode-header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.qrcode-print-btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--green, #10b981);
+    border: none;
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.qrcode-print-btn:hover {
+    opacity: 0.9;
+}
+
+.qrcode-progress-bar {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.qrcode-progress-fill {
+    height: 100%;
+    background: var(--green, #10b981);
+    border-radius: 3px;
+    transition: width 0.2s;
+}
+
+.qrcode-progress-text {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+}
+
+.qrcode-batch-container {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(95vh - 120px);
+}
+
+.qrcode-page {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.qrcode-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.qrcode-batch-qr {
+    width: 3cm;
+    height: 3cm;
+    image-rendering: pixelated;
+}
+
+.qrcode-batch-placeholder {
+    width: 3cm;
+    height: 3cm;
+    background: #e2e8f0;
+    border-radius: 4px;
+}
+
+.qrcode-batch-label {
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: #1e293b;
+    text-align: center;
+    font-weight: 500;
+    line-height: 1.2;
+    word-break: break-word;
+    max-width: 3.5cm;
+}
+
+.qrcode-empty {
+    color: var(--text-muted, #888);
+    font-size: 0.95rem;
+    text-align: center;
+    padding: 40px;
+}
+
+/* --- Print Styles --- */
+@media print {
+    .qrcode-header,
+    .qrcode-footer,
+    .qrcode-progress-bar,
+    .qrcode-header-actions,
+    .qrcode-print-btn,
+    .qrcode-cancel {
+        display: none !important;
+    }
+
+    .qrcode-overlay {
+        position: static !important;
+        display: block !important;
+        background: none !important;
+        backdrop-filter: none !important;
+        width: 100% !important;
+        height: auto !important;
+        inset: auto !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+    }
+
+    .qrcode-panel,
+    .qrcode-panel-wide {
+        display: block !important;
+        max-width: none !important;
+        width: 100% !important;
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: none !important;
+        padding: 0 !important;
+    }
+
+    .qrcode-batch-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        max-height: none !important;
+    }
+
+    .qrcode-page {
+        width: 210mm;
+        height: 297mm;
+        padding: 10mm;
+        box-sizing: border-box;
+        page-break-after: always;
+        break-after: page;
+        display: grid !important;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5mm;
+        align-content: start;
+        margin: 0;
+        background: none;
+        border-radius: 0;
+    }
+
+    .qrcode-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+    }
+
+    .qrcode-cell {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .qrcode-batch-qr {
+        width: 3cm !important;
+        height: 3cm !important;
+    }
+
+    .qrcode-batch-placeholder {
+        display: none;
+    }
+
+    @page {
+        size: A4;
+        margin: 0;
+    }
 }

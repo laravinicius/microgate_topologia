@@ -458,6 +458,7 @@ function normalizeData(data) {
       x: Number.isFinite(Number(mesa.x)) ? Number(mesa.x) : 100,
       y: Number.isFinite(Number(mesa.y)) ? Number(mesa.y) : 100,
       fixada: toBool(mesa.fixada),
+      fontSize: Number.isFinite(Number(mesa.fontSize)) ? Number(mesa.fontSize) : 15,
         pontos: Array.isArray(mesa.pontos) ? mesa.pontos.map(ponto => ({
           id: Number(ponto.id),
           rackId: toNullableNumber(ponto.rackId),
@@ -545,7 +546,7 @@ async function loadData(empresaId, andarId) {
   let mesas = [];
   if (andarId) {
     const [mesasRows] = await db.query(
-      `SELECT m.id, m.nome, m.x, m.y, m.fixada,
+      `SELECT m.id, m.nome, m.x, m.y, m.fixada, m.font_size,
               COALESCE(a.nome, '') AS andar_nome
        FROM mesas m
        LEFT JOIN andares a ON a.id = m.andar_id
@@ -562,7 +563,7 @@ async function loadData(empresaId, andarId) {
     mesas = mesasRows.map(row => {
       const mesa = {
         id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y),
-        fixada: Boolean(row.fixada), andarNome: row.andar_nome, pontos: []
+        fixada: Boolean(row.fixada), andarNome: row.andar_nome, fontSize: Number(row.font_size) || 15, pontos: []
       };
       mesasById.set(mesa.id, mesa);
       return mesa;
@@ -586,7 +587,7 @@ async function loadData(empresaId, andarId) {
 
 async function loadAllMesas(empresaId) {
   const [mesasRows] = await db.query(
-    `SELECT m.id, m.nome, m.x, m.y, m.fixada,
+    `SELECT m.id, m.nome, m.x, m.y, m.fixada, m.font_size,
             COALESCE(a.nome, '') AS andar_nome
      FROM mesas m
      LEFT JOIN andares a ON a.id = m.andar_id
@@ -606,7 +607,7 @@ async function loadAllMesas(empresaId) {
   const mesas = mesasRows.map(row => {
     const mesa = {
       id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y),
-      fixada: Boolean(row.fixada), andarNome: row.andar_nome, pontos: []
+      fixada: Boolean(row.fixada), andarNome: row.andar_nome, fontSize: Number(row.font_size) || 15, pontos: []
     };
     mesasById.set(mesa.id, mesa);
     return mesa;
@@ -629,7 +630,7 @@ async function loadAllMesas(empresaId) {
 
 async function loadAllMesasByAndar(empresaId, andarId) {
   const [mesasRows] = await db.query(
-    `SELECT m.id, m.nome, m.x, m.y, m.fixada,
+    `SELECT m.id, m.nome, m.x, m.y, m.fixada, m.font_size,
             COALESCE(a.nome, '') AS andar_nome
      FROM mesas m
      LEFT JOIN andares a ON a.id = m.andar_id
@@ -649,7 +650,7 @@ async function loadAllMesasByAndar(empresaId, andarId) {
   const mesas = mesasRows.map(row => {
     const mesa = {
       id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y),
-      fixada: Boolean(row.fixada), andarNome: row.andar_nome, pontos: []
+      fixada: Boolean(row.fixada), andarNome: row.andar_nome, fontSize: Number(row.font_size) || 15, pontos: []
     };
     mesasById.set(mesa.id, mesa);
     return mesa;
@@ -678,7 +679,7 @@ async function saveMesasData(mesas, empresaId, andarId) {
     await connection.query('DELETE FROM mesas WHERE empresa_id = ? AND andar_id = ?', [empresaId, andarId]);
 
     for (const mesa of mesas) {
-      await connection.query('INSERT INTO mesas (id, nome, x, y, fixada, empresa_id, andar_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [mesa.id, mesa.nome, mesa.x, mesa.y, mesa.fixada ? 1 : 0, empresaId, andarId]);
+      await connection.query('INSERT INTO mesas (id, nome, x, y, fixada, font_size, empresa_id, andar_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [mesa.id, mesa.nome, mesa.x, mesa.y, mesa.fixada ? 1 : 0, mesa.fontSize || 15, empresaId, andarId]);
       for (const ponto of mesa.pontos) {
         await connection.query('INSERT INTO mesa_pontos (id, mesa_id, numero, rack_id, patch_panel_id, porta, atencao) VALUES (?, ?, ?, ?, ?, ?, ?)', [(mesa.id * 100) + ponto.id, mesa.id, ponto.id, ponto.rackId, ponto.patchId, ponto.porta, ponto.atencao ? 1 : 0]);
       }
@@ -890,145 +891,37 @@ app.put('/api/ponto/toggle-atencao', requireAuth, requireEmpresa, async (req, re
   }
 });
 
-// --- QR Code: gerar imagem PNG ---
-app.get('/api/mesas/:id/qr', requireAuth, requireEmpresa, async (req, res) => {
-  const { id } = req.params;
+// --- Conexões de rack/patch panel (todas as mesas, sem filtro de andar) ---
+app.get('/api/rack-connections', requireAuth, requireEmpresa, async (req, res) => {
+  const { rackId, patchId } = req.query;
+  if (rackId == null || patchId == null) {
+    return res.status(400).json({ success: false, message: 'rackId e patchId são obrigatórios' });
+  }
   try {
     const [rows] = await db.query(
-      'SELECT id FROM mesas WHERE id = ? AND empresa_id = ?',
-      [id, req.user.empresaId]
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Mesa não encontrada' });
-    }
-    const baseUrl = process.env.QR_BASE_URL || 'http://topologia.microgateinformatica.com.br';
-    const url = `${baseUrl}/mesa/${id}`;
-    const pngBuffer = await QRCode.toBuffer(url, { width: 400, margin: 2 });
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Disposition': `inline; filename="mesa-${id}-qr.png"`
-    });
-    res.send(pngBuffer);
-  } catch (error) {
-    console.error('Erro ao gerar QR code:', error);
-    res.status(500).json({ success: false, message: 'Erro ao gerar QR code' });
-  }
-});
-
-// --- QR Code: dados públicos da mesa (sem auth) ---
-app.get('/api/mesas/por-id/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const [mesaRows] = await db.query(
-      `SELECT m.id, m.nome, e.nome AS empresa_nome, a.nome AS andar_nome
-       FROM mesas m
-       JOIN empresas e ON e.id = m.empresa_id
-       LEFT JOIN andares a ON a.id = m.andar_id
-       WHERE m.id = ?`,
-      [id]
-    );
-    if (mesaRows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Mesa não encontrada' });
-    }
-
-    const [pontosRows] = await db.query(
-      `SELECT mp.numero AS ponto, r.nome AS rack_nome, pp.nome AS patch_nome, mp.porta, mp.atencao
+      `SELECT mp.porta, m.nome AS mesa_nome, mp.numero AS ponto_id, mp.atencao, COALESCE(a.nome, '') AS andar_nome
        FROM mesa_pontos mp
-       LEFT JOIN racks r ON r.id = mp.rack_id
-       LEFT JOIN patch_panels pp ON pp.id = mp.patch_panel_id
-       WHERE mp.mesa_id = ?
-       ORDER BY mp.numero`,
-      [id]
+       JOIN mesas m ON m.id = mp.mesa_id
+       LEFT JOIN andares a ON a.id = m.andar_id
+       WHERE mp.rack_id = ? AND mp.patch_panel_id = ? AND mp.porta IS NOT NULL
+       ORDER BY mp.porta`,
+      [Number(rackId), Number(patchId)]
     );
-
-    const pontos = pontosRows.map(row => ({
-      ponto: Number(row.ponto),
-      rackNome: row.rack_nome || null,
-      patchNome: row.patch_nome || null,
-      porta: row.porta || null,
+    const connections = rows.map(row => ({
+      porta: Number(row.porta),
+      mesaNome: row.mesa_nome,
+      pontoId: Number(row.ponto_id),
       atencao: Boolean(row.atencao),
-      vinculado: !!(row.rack_nome && row.patch_nome && row.porta)
+      andarNome: row.andar_nome || null
     }));
-
-    res.json({
-      success: true,
-      mesa: {
-        id: mesaRows[0].id,
-        nome: mesaRows[0].nome,
-        empresaNome: mesaRows[0].empresa_nome,
-        andarNome: mesaRows[0].andar_nome || null,
-        pontos
-      }
-    });
+    res.json({ success: true, connections });
   } catch (error) {
-    console.error('Erro ao buscar mesa:', error);
+    console.error('Erro ao carregar conexões do rack:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });
   }
 });
 
-// --- Página pública da mesa (target do QR code) ---
-app.get('/mesa/:id', (req, res) => {
-  const mesaId = req.params.id;
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mesa</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e17;color:#e0e6ed;padding:16px}
-.card{background:#111827;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #1e293b}
-h1{font-size:22px;margin-bottom:4px}
-.sub{color:#94a3b8;font-size:14px;margin-bottom:0}
-.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;margin-top:8px}
-.badge-empresa{background:#1e3a5f;color:#60a5fa}
-.badge-andar{background:#1e3a5f;color:#60a5fa}
-table{width:100%;border-collapse:collapse}
-th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #1e293b}
-td{padding:10px 12px;border-bottom:1px solid #1e293b;font-size:14px}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
-.dot-on{background:#22c55e}
-.dot-off{background:#475569}
-.dot-atn{background:#f59e0b}
-.link{color:#60a5fa;font-size:13px}
-.loading{text-align:center;padding:60px 20px;color:#64748b}
-.error{text-align:center;padding:60px 20px;color:#ef4444}
-</style>
-</head>
-<body>
-<div id="app">
-<div class="loading">Carregando...</div>
-</div>
-<script>
-(async()=>{
-const id=${mesaId};
-const el=document.getElementById('app');
-try{
-const res=await fetch('/api/mesas/por-id/'+id);
-const json=await res.json();
-if(!json.success||!json.mesa){el.innerHTML='<div class="error">Mesa não encontrada</div>';return}
-const m=json.mesa;
-let h='<div class="card"><h1>'+esc(m.nome)+'</h1>';
-if(m.empresaNome)h+='<span class="badge badge-empresa">'+esc(m.empresaNome)+'</span>';
-if(m.andarNome)h+='<span class="badge badge-andar">'+esc(m.andarNome)+'</span>';
-h+='</div>';
-h+='<div class="card"><table><thead><tr><th>Ponto</th><th>Status</th><th>Vínculo</th></tr></thead><tbody>';
-for(const p of m.pontos){
-const dot=p.vinculado?(p.atencao?'dot-on dot-atn':'dot-on'):'dot-off';
-const status=p.vinculado?(p.atencao?'Atenção':'Vinculado'):'Livre';
-const link=p.vinculado?esc(p.rackNome)+' / '+esc(p.patchNome)+' #'+p.porta:'—';
-h+='<tr><td>P'+p.ponto+'</td><td><span class="dot '+dot+'"></span>'+status+'</td><td class="link">'+link+'</td></tr>';
-}
-h+='</tbody></table></div>';
-el.innerHTML=h;
-}catch(e){el.innerHTML='<div class="error">Erro ao carregar dados</div>'}
-function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-})();
-</script>
-</body>
-</html>`);
-});
+// --- Mapa: CRUD de elementos ---
 
 // --- Mapa: CRUD de elementos ---
 app.get('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
@@ -1053,10 +946,10 @@ app.get('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
 
 app.post('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
   try {
-    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json } = req.body;
+    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size } = req.body;
     const [result] = await db.query(
-      'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.user.empresaId, andarId || null, tipo || 'objeto', nome || '', Number(x) || 0, Number(y) || 0, Number(largura) || 100, Number(altura) || 60, cor || '#374151', Number(rotacao) || 0, Number(ordem) || 0, dados_json ? JSON.stringify(dados_json) : null]
+      'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.empresaId, andarId || null, tipo || 'objeto', nome || '', Number(x) || 0, Number(y) || 0, Number(largura) || 100, Number(altura) || 60, cor || '#374151', Number(rotacao) || 0, Number(ordem) || 0, dados_json ? JSON.stringify(dados_json) : null, Number(font_size) || 12]
     );
     broadcastSSE({ type: 'update', timestamp: Date.now() });
     res.json({ success: true, id: result.insertId });
@@ -1081,8 +974,8 @@ app.put('/api/map-elements/bulk', requireAuth, requireEmpresa, async (req, res) 
       }
       for (const el of elements) {
         await connection.query(
-          'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [req.user.empresaId, el.andarId || null, el.tipo || 'objeto', el.nome || '', Number(el.x) || 0, Number(el.y) || 0, Number(el.largura) || 100, Number(el.altura) || 60, el.cor || '#374151', Number(el.rotacao) || 0, Number(el.ordem) || 0, el.dados_json ? JSON.stringify(el.dados_json) : null]
+          'INSERT INTO map_elements (empresa_id, andar_id, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [req.user.empresaId, el.andarId || null, el.tipo || 'objeto', el.nome || '', Number(el.x) || 0, Number(el.y) || 0, Number(el.largura) || 100, Number(el.altura) || 60, el.cor || '#374151', Number(el.rotacao) || 0, Number(el.ordem) || 0, el.dados_json ? JSON.stringify(el.dados_json) : null, Number(el.font_size) || 12]
         );
       }
       await connection.commit();
@@ -1103,13 +996,13 @@ app.put('/api/map-elements/bulk', requireAuth, requireEmpresa, async (req, res) 
 app.put('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) => {
   try {
     const { id } = req.params;
-    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json } = req.body;
+    const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size } = req.body;
     const [existing] = await db.query('SELECT * FROM map_elements WHERE id = ? AND empresa_id = ?', [id, req.user.empresaId]);
     if (existing.length === 0) return res.status(404).json({ success: false, message: 'Elemento não encontrado' });
     const old = existing[0];
     await db.query(
-      'UPDATE map_elements SET andar_id = ?, tipo = ?, nome = ?, x = ?, y = ?, largura = ?, altura = ?, cor = ?, rotacao = ?, ordem = ?, dados_json = ? WHERE id = ? AND empresa_id = ?',
-      [andarId !== undefined ? (andarId || null) : old.andar_id, tipo || old.tipo, nome !== undefined ? nome : old.nome, Number(x) ?? old.x, Number(y) ?? old.y, Number(largura) || old.largura, Number(altura) || old.altura, cor || old.cor, Number(rotacao) || old.rotacao, Number(ordem) ?? old.ordem, dados_json !== undefined ? (dados_json ? JSON.stringify(dados_json) : null) : old.dados_json, id, req.user.empresaId]
+      'UPDATE map_elements SET andar_id = ?, tipo = ?, nome = ?, x = ?, y = ?, largura = ?, altura = ?, cor = ?, rotacao = ?, ordem = ?, dados_json = ?, font_size = ? WHERE id = ? AND empresa_id = ?',
+      [andarId !== undefined ? (andarId || null) : old.andar_id, tipo || old.tipo, nome !== undefined ? nome : old.nome, Number(x) ?? old.x, Number(y) ?? old.y, Number(largura) || old.largura, Number(altura) || old.altura, cor || old.cor, Number(rotacao) || old.rotacao, Number(ordem) ?? old.ordem, dados_json !== undefined ? (dados_json ? JSON.stringify(dados_json) : null) : old.dados_json, font_size !== undefined ? Number(font_size) : old.font_size, id, req.user.empresaId]
     );
     broadcastSSE({ type: 'update', timestamp: Date.now() });
     res.json({ success: true });
@@ -1128,6 +1021,234 @@ app.delete('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res
     console.error('Erro ao deletar elemento do mapa:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });
   }
+});
+
+// --- Todas as mesas com andar_id (para QR codes em massa) ---
+app.get('/api/qrcode/all-mesas', requireAuth, requireEmpresa, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT m.id, m.nome, m.andar_id, COALESCE(a.nome, '') AS andar_nome
+       FROM mesas m
+       LEFT JOIN andares a ON a.id = m.andar_id
+       WHERE m.empresa_id = ?
+       ORDER BY a.nome, m.nome`,
+      [req.user.empresaId]
+    );
+    const mesas = rows.map(row => ({
+      id: Number(row.id),
+      nome: row.nome,
+      andarId: row.andar_id !== null ? Number(row.andar_id) : null,
+      andarNome: row.andar_nome || ''
+    }));
+    res.json({ success: true, mesas });
+  } catch (error) {
+    console.error('Erro ao carregar mesas para QR codes:', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- Gerar QR Code para mesa ---
+app.get('/api/qrcode/mesa/:mesaId', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ success: false, message: 'Nao autorizado' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const [mesasRows] = await db.query(
+      'SELECT m.id, m.nome, m.empresa_id, m.andar_id FROM mesas m WHERE m.id = ? AND m.empresa_id = ?',
+      [Number(req.params.mesaId), decoded.empresaId]
+    );
+    if (mesasRows.length === 0) return res.status(404).json({ success: false, message: 'Mesa nao encontrada' });
+    const mesa = mesasRows[0];
+    const [empresasRows] = await db.query('SELECT nome FROM empresas WHERE id = ?', [mesa.empresa_id]);
+    if (empresasRows.length === 0) return res.status(404).json({ success: false, message: 'Empresa nao encontrada' });
+    const empresaNome = empresasRows[0].nome;
+    const andarId = mesa.andar_id || '';
+    const url = `https://topologia.microgateinformatica.com.br/${encodeURIComponent(empresaNome)}?mesa=${mesa.id}&andar=${andarId}`;
+    const qrBuffer = await QRCode.toBuffer(url, { width: 380, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+    const { createCanvas, loadImage } = await import('canvas');
+    const qrCanvas = createCanvas(380, 380);
+    const ctx = qrCanvas.getContext('2d');
+    const qrImg = await loadImage(qrBuffer);
+    ctx.drawImage(qrImg, 0, 0, 380, 380);
+    const logoSize = 76;
+    const logoX = (380 - logoSize) / 2;
+    const logoY = (380 - logoSize) / 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('REDE', 380 / 2, 380 / 2);
+    const finalBuffer = qrCanvas.toBuffer('image/png');
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', `attachment; filename="qrcode_mesa_${mesa.nome}.png"`);
+    res.send(finalBuffer);
+  } catch (error) {
+    console.error('Erro ao gerar QR code:', error);
+    res.status(500).json({ success: false, message: 'Erro ao gerar QR code' });
+  }
+});
+
+// --- Helper: buscar empresa por slug (case-insensitive) ---
+async function findEmpresaBySlug(slug) {
+  if (!slug || slug.length === 0) return null;
+  const [rows] = await db.query('SELECT id, nome FROM empresas WHERE BINARY LOWER(nome) = BINARY LOWER(?)', [slug]);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// --- Rotas públicas de visualização do mapa ---
+
+// Andares públicos
+app.get('/api/public/andares', async (req, res) => {
+  const empresa = await findEmpresaBySlug(req.query.empresa);
+  if (!empresa) return res.status(404).json({ success: false, message: 'Empresa não encontrada' });
+  try {
+    const [rows] = await db.query('SELECT id, nome FROM andares WHERE empresa_id = ? ORDER BY nome', [empresa.id]);
+    res.json({ success: true, andares: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// Map elements públicos
+app.get('/api/public/map-elements', async (req, res) => {
+  const empresa = await findEmpresaBySlug(req.query.empresa);
+  if (!empresa) return res.status(404).json({ success: false, message: 'Empresa não encontrada' });
+  try {
+    const { andarId } = req.query;
+    let query = 'SELECT * FROM map_elements WHERE empresa_id = ?';
+    const params = [empresa.id];
+    if (andarId) {
+      query += ' AND andar_id = ?';
+      params.push(Number(andarId));
+    } else {
+      query += ' AND andar_id IS NULL';
+    }
+    query += ' ORDER BY ordem, id';
+    const [rows] = await db.query(query, params);
+    res.json({ success: true, elements: rows.map(r => ({ ...r, dados_json: r.dados_json ? JSON.parse(r.dados_json) : null })) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// Racks públicos (com mesas)
+app.get('/api/public/racks', async (req, res) => {
+  const empresa = await findEmpresaBySlug(req.query.empresa);
+  if (!empresa) return res.status(404).json({ success: false, message: 'Empresa não encontrada' });
+  try {
+    const [racksRows] = await db.query('SELECT id, nome FROM racks WHERE empresa_id = ? ORDER BY created_at, id', [empresa.id]);
+    const [patchPanelRows] = await db.query('SELECT id, rack_id, nome, portas FROM patch_panels WHERE rack_id IN (SELECT id FROM racks WHERE empresa_id = ?) ORDER BY created_at, id', [empresa.id]);
+    const racksById = new Map();
+    const racks = racksRows.map(row => {
+      const rack = { id: Number(row.id), nome: row.nome, patchPanels: [] };
+      racksById.set(rack.id, rack);
+      return rack;
+    });
+    patchPanelRows.forEach(row => {
+      const rack = racksById.get(Number(row.rack_id));
+      if (!rack) return;
+      rack.patchPanels.push({ id: Number(row.id), nome: row.nome, portas: Number(row.portas) });
+    });
+
+    let mesas = [];
+    const { andarId } = req.query;
+    if (andarId) {
+      const [mesasRows] = await db.query('SELECT m.id, m.nome, m.x, m.y, m.fixada, m.font_size, COALESCE(a.nome, \'\') AS andar_nome FROM mesas m LEFT JOIN andares a ON a.id = m.andar_id WHERE m.empresa_id = ? AND m.andar_id = ? ORDER BY m.created_at, m.id', [empresa.id, Number(andarId)]);
+      const [pontosRows] = await db.query('SELECT mesa_id, numero, rack_id, patch_panel_id, porta, atencao FROM mesa_pontos WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ? AND andar_id = ?) ORDER BY numero', [empresa.id, Number(andarId)]);
+      const mesasById = new Map();
+      mesas = mesasRows.map(row => {
+        const mesa = { id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y), fixada: Boolean(row.fixada), andarNome: row.andar_nome, fontSize: Number(row.font_size) || 15, pontos: [] };
+        mesasById.set(mesa.id, mesa);
+        return mesa;
+      });
+      pontosRows.forEach(row => {
+        const mesa = mesasById.get(Number(row.mesa_id));
+        if (!mesa) return;
+        mesa.pontos.push({ id: Number(row.numero), rackId: row.rack_id === null ? null : Number(row.rack_id), patchId: row.patch_panel_id === null ? null : Number(row.patch_panel_id), porta: row.porta === null ? null : Number(row.porta), atencao: Boolean(row.atencao) });
+      });
+    } else {
+      const [mesasRows] = await db.query('SELECT m.id, m.nome, m.x, m.y, m.fixada, m.font_size, COALESCE(a.nome, \'\') AS andar_nome FROM mesas m LEFT JOIN andares a ON a.id = m.andar_id WHERE m.empresa_id = ? ORDER BY a.nome, m.created_at, m.id', [empresa.id]);
+      const [pontosRows] = await db.query('SELECT mesa_id, numero, rack_id, patch_panel_id, porta, atencao FROM mesa_pontos WHERE mesa_id IN (SELECT id FROM mesas WHERE empresa_id = ?) ORDER BY numero', [empresa.id]);
+      const mesasById = new Map();
+      mesas = mesasRows.map(row => {
+        const mesa = { id: Number(row.id), nome: row.nome, x: Number(row.x), y: Number(row.y), fixada: Boolean(row.fixada), andarNome: row.andar_nome, fontSize: Number(row.font_size) || 15, pontos: [] };
+        mesasById.set(mesa.id, mesa);
+        return mesa;
+      });
+      pontosRows.forEach(row => {
+        const mesa = mesasById.get(Number(row.mesa_id));
+        if (!mesa) return;
+        mesa.pontos.push({ id: Number(row.numero), rackId: row.rack_id === null ? null : Number(row.rack_id), patchId: row.patch_panel_id === null ? null : Number(row.patch_panel_id), porta: row.porta === null ? null : Number(row.porta), atencao: Boolean(row.atencao) });
+      });
+    }
+    res.json({ success: true, racks, mesas });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- Conexões de rack/patch panel públicas ---
+app.get('/api/public/rack-connections', async (req, res) => {
+  const { rackId, patchId } = req.query;
+  if (rackId == null || patchId == null) {
+    return res.status(400).json({ success: false, message: 'rackId e patchId são obrigatórios' });
+  }
+  const empresa = await findEmpresaBySlug(req.query.empresa);
+  if (!empresa) return res.status(404).json({ success: false, message: 'Empresa não encontrada' });
+  try {
+    const [rows] = await db.query(
+      `SELECT mp.porta, m.nome AS mesa_nome, mp.numero AS ponto_id, mp.atencao, COALESCE(a.nome, '') AS andar_nome
+       FROM mesa_pontos mp
+       JOIN mesas m ON m.id = mp.mesa_id
+       LEFT JOIN andares a ON a.id = m.andar_id
+       WHERE mp.rack_id = ? AND mp.patch_panel_id = ? AND mp.porta IS NOT NULL
+       ORDER BY mp.porta`,
+      [Number(rackId), Number(patchId)]
+    );
+    const connections = rows.map(row => ({
+      porta: Number(row.porta),
+      mesaNome: row.mesa_nome,
+      pontoId: Number(row.ponto_id),
+      atencao: Boolean(row.atencao),
+      andarNome: row.andar_nome || null
+    }));
+    res.json({ success: true, connections });
+  } catch (error) {
+    console.error('Erro ao carregar conexões do rack (publico):', error);
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- Rota pública: dados completos de uma empresa ---
+app.get('/api/public/empresa', async (req, res) => {
+  const empresa = await findEmpresaBySlug(req.query.nome);
+  if (!empresa) return res.status(404).json({ success: false, message: 'Empresa não encontrada' });
+  try {
+    const [andaresRows] = await db.query('SELECT id, nome FROM andares WHERE empresa_id = ? ORDER BY nome', [empresa.id]);
+    res.json({
+      success: true,
+      empresa: { id: empresa.id, nome: empresa.nome },
+      andares: andaresRows
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// --- Página pública de visualização do mapa: /:empresaSlug ---
+const RESERVED_PATHS = new Set(['api', 'img']);
+
+app.get('/:slug', async (req, res, next) => {
+  const slug = req.params.slug;
+  if (RESERVED_PATHS.has(slug)) return next();
+
+  const empresa = await findEmpresaBySlug(slug);
+  if (!empresa) return next();
+
+  // Servir o SPA (React Router cuida do resto)
+  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
 });
 
 // --- Em produção, servir o build do frontend ---

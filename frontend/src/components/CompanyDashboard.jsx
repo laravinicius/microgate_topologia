@@ -4,14 +4,16 @@ import { useNotification } from './Notification';
 import { usePrompt } from './PromptModal';
 import RackListView from './RackListView';
 import MapEditor from './MapEditor';
+import QRCodeBatchPrint from './QRCodeBatchPrint';
 import { api } from '../api';
 
 export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
-  const { empresaNome, selectAndar, logout } = useAuth();
+  const { empresaNome, andarNome, selectAndar, logout } = useAuth();
   const { success, error } = useNotification();
   const prompt = usePrompt();
 
   const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
+  const [showBatchQR, setShowBatchQR] = useState(false);
   const [andares, setAndares] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -181,6 +183,10 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} />;
   }
 
+  if (showBatchQR) {
+    return <QRCodeBatchPrint empresaSlug={empresaNome} onClose={() => setShowBatchQR(false)} />;
+  }
+
   return (
     <div className="companyScreenWrapper">
       <div className="companyScreen">
@@ -190,6 +196,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
           <div className="headerRight">
             <button className="btnNav btn-map-view" onClick={() => setShowMap('view')}>👁 Ver Mapa</button>
             <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
+            <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
             <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
             <button className="btnLogoff" onClick={logout}>Sair</button>
           </div>
