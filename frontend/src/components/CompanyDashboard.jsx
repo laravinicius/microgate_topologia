@@ -191,11 +191,12 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     <div className="companyScreenWrapper">
       <div className="companyScreen">
         <header>
-          <div className="headerLeft"></div>
-          <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
-          <div className="headerRight">
+          <div className="headerLeft">
             <button className="btnNav btn-map-view" onClick={() => setShowMap('view')}>👁 Ver Mapa</button>
             <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
+          </div>
+          <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
+          <div className="headerRight">
             <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
             <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
             <button className="btnLogoff" onClick={logout}>Sair</button>

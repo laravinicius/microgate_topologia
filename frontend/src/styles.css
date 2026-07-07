@@ -1631,6 +1631,13 @@ main {
     object-fit: contain;
 }
 
+.companyScreen .headerLeft {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    white-space: nowrap;
+}
+
 .companyScreen .headerRight {
     display: flex;
     gap: 8px;
