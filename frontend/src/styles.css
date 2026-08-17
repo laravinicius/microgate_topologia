@@ -1459,6 +1459,7 @@ main {
 
     .companyScreen {
         max-width: none;
+        width: 100%;
         margin: 0;
         box-shadow: none;
     }
@@ -1776,6 +1777,7 @@ main {
     height: 36px;
     max-width: 100%;
     object-fit: contain;
+    grid-column: 2;
 }
 
 .companyScreen .headerLeft {
@@ -1790,6 +1792,7 @@ main {
     gap: 8px;
     align-items: center;
     justify-self: end;
+    grid-column: 3;
 }
 
 .btnLogoff {
@@ -3516,5 +3519,28 @@ main {
     @page {
         size: A4;
         margin: 0;
+    }
+}
+
+/* ===== Responsive header fix ===== */
+/* Re-declared after base rules to win the cascade: keeps only logo + hamburger on mobile */
+@media (max-width: 768px) {
+    .desktop-nav,
+    .companyScreen .headerLeft.desktop-nav {
+        display: none;
+    }
+
+    .mobile-menu {
+        display: flex;
+        align-items: center;
+    }
+
+    header,
+    .companyScreen header {
+        padding: 0;
+    }
+
+    .headerLeft {
+        padding-left: 15px;
     }
 }
