@@ -1,15 +1,21 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+
+const IDLE_TIMEOUT_MS = 20 * 60 * 1000;
+const IDLE_CHECK_MS = 30 * 1000;
+const IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'input', 'wheel'];
 import { api, setToken, getToken, clearToken } from '../api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [empresaId, setEmpresaId] = useState(null);
   const [empresaNome, setEmpresaNome] = useState(null);
   const [andarId, setAndarId] = useState(null);
   const [andarNome, setAndarNome] = useState(null);
+  const lastActivityRef = useRef(Date.now());
 
   const fetchSession = useCallback(async () => {
     const token = getToken();
@@ -21,16 +27,11 @@ export function AuthProvider({ children }) {
       const me = await api.get('/api/auth/me');
       if (me.authenticated) {
         setUser(me.username);
-        const showCompanySelection = sessionStorage.getItem('showCompanySelection') === 'true';
-        const empresa = showCompanySelection ? null : (me.empresaId || null);
-        setEmpresaId(empresa);
-        if (empresa) {
-          const info = await api.get('/api/auth/session-info');
-          setEmpresaNome(info.empresaNome || null);
-          const showAndarSelection = sessionStorage.getItem('showAndarSelection') === 'true';
-          setAndarId(showAndarSelection ? null : (info.andarId || null));
-          setAndarNome(showAndarSelection ? null : (info.andarNome || null));
-        }
+        setIsAdmin(Boolean(me.isAdmin));
+        setEmpresaId(null);
+        setEmpresaNome(null);
+        setAndarId(null);
+        setAndarNome(null);
       } else {
         clearToken();
       }
@@ -45,11 +46,43 @@ export function AuthProvider({ children }) {
     fetchSession();
   }, [fetchSession]);
 
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    const resetIdle = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const checkIdle = () => {
+      if (Date.now() - lastActivityRef.current > IDLE_TIMEOUT_MS) {
+        clearInterval(timeoutRef.current);
+        logout();
+      }
+    };
+
+    IDLE_EVENTS.forEach((event) => {
+      window.addEventListener(event, resetIdle, { passive: true });
+    });
+    const interval = window.setInterval(checkIdle, IDLE_CHECK_MS);
+    timeoutRef.current = interval;
+
+    return () => {
+      IDLE_EVENTS.forEach((event) => {
+        window.removeEventListener(event, resetIdle);
+      });
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const login = async (username, password) => {
     const data = await api.post('/api/auth/login', { username, password });
     if (!data.success) throw new Error(data.message || 'Falha no login');
     setToken(data.token);
     setUser(data.username);
+    setIsAdmin(Boolean(data.isAdmin));
     return data;
   };
 
@@ -58,10 +91,9 @@ export function AuthProvider({ children }) {
       await api.post('/api/auth/logout');
     } catch {
     }
-    sessionStorage.removeItem('showCompanySelection');
-    sessionStorage.removeItem('showAndarSelection');
     clearToken();
     setUser(null);
+    setIsAdmin(false);
     setEmpresaId(null);
     setEmpresaNome(null);
     setAndarId(null);
@@ -71,8 +103,6 @@ export function AuthProvider({ children }) {
   const selectCompany = async (id) => {
     const data = await api.post('/api/auth/select-company', { empresaId: id });
     if (data.success) {
-      sessionStorage.removeItem('showCompanySelection');
-      sessionStorage.removeItem('showAndarSelection');
       if (data.token) setToken(data.token);
       setEmpresaId(data.empresaId);
       setEmpresaNome(data.empresaNome || null);
@@ -85,7 +115,6 @@ export function AuthProvider({ children }) {
   const selectAndar = async (id) => {
     const data = await api.post('/api/auth/select-andar', { andarId: id });
     if (data.success) {
-      sessionStorage.removeItem('showAndarSelection');
       if (data.token) setToken(data.token);
       setAndarId(data.andarId);
       setAndarNome(data.andarNome || null);
@@ -94,7 +123,6 @@ export function AuthProvider({ children }) {
   };
 
   const clearAndar = () => {
-    sessionStorage.setItem('showAndarSelection', 'true');
     setAndarId(null);
     setAndarNome(null);
   };
@@ -108,7 +136,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, empresaId, empresaNome, andarId, andarNome,
+      user, isAdmin, loading, empresaId, empresaNome, andarId, andarNome,
       login, logout, selectCompany, selectAndar, clearAndar, clearEmpresa,
       setEmpresaNome, setEmpresaId
     }}>

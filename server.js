@@ -83,8 +83,8 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user?.username !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Apenas admin pode gerenciar usuários' });
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ success: false, message: 'Acesso negado: apenas administradores' });
   }
   next();
 }
@@ -116,7 +116,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      'SELECT id, username, password_hash, is_active FROM users WHERE username = ?',
+      'SELECT id, username, password_hash, is_active, is_admin FROM users WHERE username = ?',
       [username.trim().toLowerCase()]
     );
 
@@ -130,8 +130,9 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Credenciais inválidas' });
     }
 
-    const token = signToken({ username: user.username, userId: user.id, empresaId: null });
-    res.json({ success: true, token, username: user.username });
+    const isAdmin = Boolean(user.is_admin);
+    const token = signToken({ username: user.username, userId: user.id, isAdmin, empresaId: null, andarId: null });
+    res.json({ success: true, token, username: user.username, isAdmin });
   } catch (error) {
     console.error('Erro no login:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });
@@ -151,6 +152,7 @@ app.get('/api/auth/me', (req, res) => {
   res.json({
     authenticated: true,
     username: decoded.username,
+    isAdmin: Boolean(decoded.isAdmin),
     empresaId: decoded.empresaId || null,
     andarId: decoded.andarId || null
   });
@@ -163,7 +165,7 @@ app.get('/api/auth/session-info', (req, res) => {
     return res.json({ empresaId: null, empresaNome: null, andarId: null, andarNome: null, isAdmin: false });
   }
 
-  const isAdmin = decoded.username === 'admin';
+  const isAdmin = Boolean(decoded.isAdmin) || decoded.username === 'admin';
 
   if (!decoded.empresaId) {
     return res.json({ empresaId: null, empresaNome: null, andarId: null, andarNome: null, isAdmin });
@@ -200,9 +202,20 @@ app.post('/api/auth/select-company', requireAuth, async (req, res) => {
     const [rows] = await db.query('SELECT nome FROM empresas WHERE id = ?', [empresaId]);
     const empresaNome = rows.length > 0 ? rows[0].nome : null;
 
+    if (!req.user.isAdmin) {
+      const [acesso] = await db.query(
+        'SELECT 1 FROM user_empresas WHERE user_id = ? AND empresa_id = ?',
+        [req.user.userId, Number(empresaId)]
+      );
+      if (acesso.length === 0) {
+        return res.status(403).json({ success: false, message: 'Acesso negado a esta empresa' });
+      }
+    }
+
     const token = signToken({
       username: req.user.username,
       userId: req.user.userId,
+      isAdmin: req.user.isAdmin,
       empresaId: Number(empresaId),
       andarId: null
     });
@@ -227,6 +240,7 @@ app.post('/api/auth/select-andar', requireAuth, requireEmpresa, async (req, res)
     const token = signToken({
       username: req.user.username,
       userId: req.user.userId,
+      isAdmin: req.user.isAdmin,
       empresaId: req.user.empresaId,
       andarId: Number(andarId)
     });
@@ -241,8 +255,29 @@ app.post('/api/auth/select-andar', requireAuth, requireEmpresa, async (req, res)
 // --- CRUD de Usuários ---
 app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, username, is_active, created_at FROM users ORDER BY username');
-    res.json({ success: true, users: rows });
+    const [rows] = await db.query(
+      `SELECT u.id, u.username, u.is_active, u.is_admin, u.created_at,
+              COALESCE(GROUP_CONCAT(CONCAT(ue.empresa_id, ':', e.nome) ORDER BY e.nome SEPARATOR '|'), '') AS empresas
+       FROM users u
+       LEFT JOIN user_empresas ue ON ue.user_id = u.id
+       LEFT JOIN empresas e ON e.id = ue.empresa_id
+       GROUP BY u.id, u.username, u.is_active, u.is_admin, u.created_at
+       ORDER BY u.username`
+    );
+    const users = rows.map(row => ({
+      id: row.id,
+      username: row.username,
+      is_active: Boolean(row.is_active),
+      is_admin: Boolean(row.is_admin),
+      created_at: row.created_at,
+      empresas: row.empresas
+        ? row.empresas.split('|').filter(Boolean).map(pair => {
+            const [id, ...nome] = pair.split(':');
+            return { id: Number(id), nome: nome.join(':') };
+          })
+        : []
+    }));
+    res.json({ success: true, users });
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });
@@ -250,14 +285,22 @@ app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
 });
 
 app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, is_admin, empresaIds } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, message: 'Usuário e senha necessários' });
   }
 
   try {
     const hash = await bcrypt.hash(password, 8);
-    await db.query('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username.trim().toLowerCase(), hash]);
+    const [result] = await db.query(
+      'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)',
+      [username.trim().toLowerCase(), hash, is_admin ? 1 : 0]
+    );
+    if (Array.isArray(empresaIds)) {
+      for (const empresaId of empresaIds) {
+        await db.query('INSERT INTO user_empresas (user_id, empresa_id) VALUES (?, ?)', [result.insertId, Number(empresaId)]);
+      }
+    }
     res.json({ success: true });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -270,7 +313,16 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
 
 app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { password, is_active } = req.body;
+  const { password, is_active, is_admin, empresaIds } = req.body;
+
+  if (Number(id) === Number(req.user.userId)) {
+    if (is_active === false) {
+      return res.status(400).json({ success: false, message: 'Você não pode desativar a si mesmo' });
+    }
+    if (is_admin === false) {
+      return res.status(400).json({ success: false, message: 'Você não pode rebaixar o próprio perfil' });
+    }
+  }
 
   const updates = [];
   const values = [];
@@ -283,14 +335,25 @@ app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
     updates.push('is_active = ?');
     values.push(is_active ? 1 : 0);
   }
-
-  if (updates.length === 0) {
-    return res.status(400).json({ success: false, message: 'Nada para atualizar' });
+  if (is_admin !== undefined) {
+    updates.push('is_admin = ?');
+    values.push(is_admin ? 1 : 0);
   }
 
   values.push(id);
   try {
-    await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+    if (updates.length > 0) {
+      await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+    }
+    if (Array.isArray(empresaIds)) {
+      await db.query('DELETE FROM user_empresas WHERE user_id = ?', [id]);
+      for (const empresaId of empresaIds) {
+        await db.query('INSERT INTO user_empresas (user_id, empresa_id) VALUES (?, ?)', [id, Number(empresaId)]);
+      }
+    }
+    if (updates.length === 0 && !Array.isArray(empresaIds)) {
+      return res.status(400).json({ success: false, message: 'Nada para atualizar' });
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
@@ -300,6 +363,9 @@ app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 
 app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
+  if (Number(id) === Number(req.user.userId)) {
+    return res.status(400).json({ success: false, message: 'Você não pode desativar a si mesmo' });
+  }
   try {
     await db.query('UPDATE users SET is_active = 0 WHERE id = ?', [id]);
     res.json({ success: true });
@@ -312,7 +378,19 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 // --- CRUD de Empresas ---
 app.get('/api/empresas', requireAuth, async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, nome, created_at FROM empresas ORDER BY nome');
+    let rows;
+    if (req.user.isAdmin) {
+      [rows] = await db.query('SELECT id, nome, created_at FROM empresas ORDER BY nome');
+    } else {
+      [rows] = await db.query(
+        `SELECT e.id, e.nome, e.created_at
+         FROM empresas e
+         JOIN user_empresas ue ON ue.empresa_id = e.id
+         WHERE ue.user_id = ?
+         ORDER BY e.nome`,
+        [req.user.userId]
+      );
+    }
     res.json({ success: true, empresas: rows });
   } catch (error) {
     console.error('Erro ao listar empresas:', error);
@@ -320,7 +398,7 @@ app.get('/api/empresas', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/empresas', requireAuth, async (req, res) => {
+app.post('/api/empresas', requireAuth, requireAdmin, async (req, res) => {
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
     return res.status(400).json({ success: false, message: 'Nome da empresa necessário' });
@@ -337,7 +415,7 @@ app.post('/api/empresas', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/empresas/:id', requireAuth, async (req, res) => {
+app.put('/api/empresas/:id', requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
@@ -355,7 +433,7 @@ app.put('/api/empresas/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/empresas/:id', requireAuth, async (req, res) => {
+app.delete('/api/empresas/:id', requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await db.query('DELETE FROM empresas WHERE id = ?', [id]);
@@ -377,7 +455,7 @@ app.get('/api/andares', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.post('/api/andares', requireAuth, requireEmpresa, async (req, res) => {
+app.post('/api/andares', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
     return res.status(400).json({ success: false, message: 'Nome do andar necessário' });
@@ -394,7 +472,7 @@ app.post('/api/andares', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.put('/api/andares/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/andares/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
@@ -412,7 +490,7 @@ app.put('/api/andares/:id', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.delete('/api/andares/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.delete('/api/andares/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { id } = req.params;
   try {
     await db.query('DELETE FROM andares WHERE id = ? AND empresa_id = ?', [id, req.user.empresaId]);
@@ -764,7 +842,7 @@ app.get('/api/data', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.post('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
+app.post('/api/racks', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
     return res.status(400).json({ success: false, message: 'Nome do rack necessario' });
@@ -797,7 +875,7 @@ app.get('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.put('/api/data', requireAuth, requireEmpresa, requireAndar, async (req, res) => {
+app.put('/api/data', requireAuth, requireAdmin, requireEmpresa, requireAndar, async (req, res) => {
   try {
     const data = normalizeData(req.body);
     const validationError = validateData(data);
@@ -813,7 +891,7 @@ app.put('/api/data', requireAuth, requireEmpresa, requireAndar, async (req, res)
   }
 });
 
-app.put('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/racks', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     const data = normalizeData(req.body);
     const validationError = validateData(data);
@@ -829,7 +907,7 @@ app.put('/api/racks', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.put('/api/racks/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/racks/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
@@ -848,7 +926,7 @@ app.put('/api/racks/:id', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.put('/api/mesas/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/mesas/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { id } = req.params;
   const { nome } = req.body;
   if (!nome || !nome.trim()) {
@@ -867,7 +945,7 @@ app.put('/api/mesas/:id', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.put('/api/ponto/toggle-atencao', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/ponto/toggle-atencao', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   const { rackId, patchId, porta } = req.body;
   if (rackId == null || patchId == null || porta == null) {
     return res.status(400).json({ success: false, message: 'rackId, patchId e porta são obrigatórios' });
@@ -944,7 +1022,7 @@ app.get('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
   }
 });
 
-app.post('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
+app.post('/api/map-elements', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size } = req.body;
     const [result] = await db.query(
@@ -960,7 +1038,7 @@ app.post('/api/map-elements', requireAuth, requireEmpresa, async (req, res) => {
 });
 
 // Bulk save MUST be before :id route so Express matches it first
-app.put('/api/map-elements/bulk', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/map-elements/bulk', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     const { elements, andarId } = req.body;
     if (!Array.isArray(elements)) return res.status(400).json({ success: false, message: 'elements deve ser um array' });
@@ -993,7 +1071,7 @@ app.put('/api/map-elements/bulk', requireAuth, requireEmpresa, async (req, res) 
   }
 });
 
-app.put('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.put('/api/map-elements/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     const { id } = req.params;
     const { andarId, tipo, nome, x, y, largura, altura, cor, rotacao, ordem, dados_json, font_size } = req.body;
@@ -1012,7 +1090,7 @@ app.put('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) =
   }
 });
 
-app.delete('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res) => {
+app.delete('/api/map-elements/:id', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     await db.query('DELETE FROM map_elements WHERE id = ? AND empresa_id = ?', [req.params.id, req.user.empresaId]);
     broadcastSSE({ type: 'update', timestamp: Date.now() });
@@ -1024,7 +1102,7 @@ app.delete('/api/map-elements/:id', requireAuth, requireEmpresa, async (req, res
 });
 
 // --- Todas as mesas com andar_id (para QR codes em massa) ---
-app.get('/api/qrcode/all-mesas', requireAuth, requireEmpresa, async (req, res) => {
+app.get('/api/qrcode/all-mesas', requireAuth, requireAdmin, requireEmpresa, async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT m.id, m.nome, m.andar_id, COALESCE(a.nome, '') AS andar_nome
@@ -1053,6 +1131,7 @@ app.get('/api/qrcode/mesa/:mesaId', async (req, res) => {
   if (!token) return res.status(401).json({ success: false, message: 'Nao autorizado' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.isAdmin && decoded.username !== 'admin') return res.status(403).json({ success: false, message: 'Acesso negado' });
     const [mesasRows] = await db.query(
       'SELECT m.id, m.nome, m.empresa_id, m.andar_id FROM mesas m WHERE m.id = ? AND m.empresa_id = ?',
       [Number(req.params.mesaId), decoded.empresaId]

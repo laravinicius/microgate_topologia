@@ -24,7 +24,7 @@ function calcularConexoes(rack, pp, mesas) {
   return conexoes;
 }
 
-export default function RackListView({ racks, mesas, onEditRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel, onTogglePortaAtencao }) {
+export default function RackListView({ racks, mesas, onEditRack, onApagarRack, onCriarPatchPanel, onApagarPatchPanel, onTogglePortaAtencao, readOnly = false }) {
   const [rackExpandido, setRackExpandido] = useState(null);
 
   return (
@@ -42,8 +42,12 @@ export default function RackListView({ racks, mesas, onEditRack, onApagarRack, o
                 <span className="rackToggle">{expandido ? '▼' : '▶'}</span>
                 <h3>{rack.nome}</h3>
                 <div className="rackItemAcoes">
-                  <button className="btn-edit-company" onClick={(e) => { e.stopPropagation(); onEditRack(rack); }}>Editar</button>
-                  <button className="botaoApagarRack" onClick={(e) => { e.stopPropagation(); onApagarRack(rack); }}>Apagar</button>
+                  {!readOnly && (
+                    <>
+                      <button className="btn-edit-company" onClick={(e) => { e.stopPropagation(); onEditRack(rack); }}>Editar</button>
+                      <button className="botaoApagarRack" onClick={(e) => { e.stopPropagation(); onApagarRack(rack); }}>Apagar</button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -61,14 +65,14 @@ export default function RackListView({ racks, mesas, onEditRack, onApagarRack, o
                                 <span className="patchCardNome">{pp.nome}</span>
                                 <span className="patchCardInfo">{pp.portas} portas &mdash; {usadas}/{pp.portas} usadas</span>
                               </div>
-                              <button className="botaoApagarPatch" onClick={() => onApagarPatchPanel(rack.id, pp)}>Apagar</button>
+                              {!readOnly && <button className="botaoApagarPatch" onClick={() => onApagarPatchPanel(rack.id, pp)}>Apagar</button>}
                             </div>
                             <div className="portGrid">
                               {conexoes.map(cx => (
                                 <div
                                   key={cx.porta}
-                                  className={`portItem ${cx.mesaNome ? 'used' : 'free'}${cx.atencao ? ' attention' : ''}`}
-                                  onClick={cx.mesaNome ? () => onTogglePortaAtencao(rack.id, pp.id, cx.porta) : undefined}
+                                  className={`portItem ${cx.mesaNome ? 'used' : 'free'}${cx.atencao ? ' attention' : ''}${readOnly ? ' readonly' : ''}`}
+                                  onClick={!readOnly && cx.mesaNome ? () => onTogglePortaAtencao(rack.id, pp.id, cx.porta) : undefined}
                                 >
                                   <span className="portNum">{cx.porta}</span>
                                   <span className="portLabel">
@@ -82,7 +86,9 @@ export default function RackListView({ racks, mesas, onEditRack, onApagarRack, o
                       })}
                     </div>
                   )}
-                  <button className="btnNovoPatchPanel" onClick={() => onCriarPatchPanel(rack.id)}>+ Patch Panel</button>
+                  {!readOnly && (
+                    <button className="btnNovoPatchPanel" onClick={() => onCriarPatchPanel(rack.id)}>+ Patch Panel</button>
+                  )}
                 </div>
               )}
             </div>

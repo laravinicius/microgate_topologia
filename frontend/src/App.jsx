@@ -6,6 +6,7 @@ import LoginScreen from './components/LoginScreen';
 import CompanyScreen from './components/CompanyScreen';
 import CompanyDashboard from './components/CompanyDashboard';
 import Header from './components/Header';
+import Administracao from './components/Administracao';
 
 import VinculoPanel from './components/VinculoPanel';
 import DetalhesPatch from './components/DetalhesPatch';
@@ -106,9 +107,10 @@ function calcularPosicoes(mesas) {
 }
 
 function AppContent() {
-  const { user, loading, empresaId, empresaNome, andarId, clearAndar, clearEmpresa } = useAuth();
+  const { user, isAdmin, loading, empresaId, empresaNome, andarId, clearAndar, clearEmpresa } = useAuth();
   const prompt = usePrompt();
 
+  const [showAdmin, setShowAdmin] = useState(false);
   const [data, setData] = useState({ mesas: [], racks: [] });
 
   const [vinculo, setVinculo] = useState(null);
@@ -350,7 +352,6 @@ function AppContent() {
   }, [data, vinculo, carregarDadosServidor]);
 
   const handleSwitchCompany = useCallback(() => {
-    sessionStorage.setItem('showCompanySelection', 'true');
     clearEmpresa();
   }, [clearEmpresa]);
 
@@ -360,8 +361,12 @@ function AppContent() {
 
   if (loading) return null;
   if (!user) return <LoginScreen />;
+  if (showAdmin && isAdmin) return <Administracao onVoltar={() => setShowAdmin(false)} />;
   if (!empresaId) {
-    return <CompanyScreen />;
+    return <CompanyScreen onOpenAdmin={() => setShowAdmin(true)} />;
+  }
+  if (!isAdmin) {
+    return <CompanyDashboard isViewer onSwitchCompany={handleSwitchCompany} />;
   }
   if (!andarId) {
     return <CompanyDashboard onAndarSelected={handleAndarSelected} onSwitchCompany={handleSwitchCompany} />;

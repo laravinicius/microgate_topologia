@@ -17,6 +17,8 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
+  const [hamburguerOpen, setHamburguerOpen] = useState(false);
+
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoElement, setInfoElement] = useState(null);
   const [infoPatchPanel, setInfoPatchPanel] = useState(null);
@@ -307,24 +309,39 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
 
         <span className="map-title">🗺 Mapa — {empresaNome}</span>
 
-        <div className="map-andar-tabs">
-          {andares.map(a => (
-            <button
-              key={a.id}
-              className={`map-andar-tab ${activeAndarId === a.id ? 'active' : ''}`}
-              onClick={() => setActiveAndarId(a.id)}
-            >
-              {a.nome}
-            </button>
-          ))}
-          {andares.length === 0 && (
-            <span className="map-andar-tab-disabled">Nenhum andar</span>
-          )}
-        </div>
-
         <div className="map-header-actions">
           <span className="map-mode-badge">👁 Visualização</span>
         </div>
+      </div>
+
+      <div className="map-hamburger">
+        <button
+          className="map-hamburger-btn"
+          onClick={() => setHamburguerOpen(o => !o)}
+          aria-label="Andares"
+        >
+          ☰
+        </button>
+        <span className="map-hamburger-label">Andares</span>
+        {hamburguerOpen && (
+          <div className="map-hamburger-panel">
+            {andares.map(a => (
+              <button
+                key={a.id}
+                className={`map-andar-tab ${activeAndarId === a.id ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveAndarId(a.id);
+                  setHamburguerOpen(false);
+                }}
+              >
+                {a.nome}
+              </button>
+            ))}
+            {andares.length === 0 && (
+              <span className="map-andar-tab-disabled">Nenhum andar</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="map-editor-body">

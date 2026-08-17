@@ -7,18 +7,20 @@ import MapEditor from './MapEditor';
 import QRCodeBatchPrint from './QRCodeBatchPrint';
 import { api } from '../api';
 
-export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
+export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isViewer = false }) {
   const { empresaNome, andarNome, selectAndar, logout } = useAuth();
   const { success, error } = useNotification();
   const prompt = usePrompt();
 
   const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
   const [showBatchQR, setShowBatchQR] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [andares, setAndares] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [racks, setRacks] = useState([]);
   const [mesas, setMesas] = useState([]);
+  const [andarExpandido, setAndarExpandido] = useState(null);
 
   const loadAndares = useCallback(async () => {
     try {
@@ -179,6 +181,14 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     }
   };
 
+  const formatPontoResumo = (p) => {
+    if (!p.rackId || !p.patchId || !p.porta) return null;
+    const rack = racks.find(r => r.id === p.rackId);
+    const pp = rack && rack.patchPanels.find(x => x.id === p.patchId);
+    if (!rack || !pp) return null;
+    return `${rack.nome} | ${pp.nome} | Porta ${p.porta}`;
+  };
+
   if (showMap) {
     return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} />;
   }
@@ -191,15 +201,68 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
     <div className="companyScreenWrapper">
       <div className="companyScreen">
         <header>
-          <div className="headerLeft">
+          <div className="headerLeft desktop-nav">
             <button className="btnNav btn-map-view" onClick={() => setShowMap('view')}>👁 Ver Mapa</button>
-            <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
+            {!isViewer && (
+              <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
+            )}
           </div>
           <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
           <div className="headerRight">
-            <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
-            <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
-            <button className="btnLogoff" onClick={logout}>Sair</button>
+            <div className="desktop-nav">
+              {!isViewer && (
+                <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
+              )}
+              <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
+              <button className="btnLogoff" onClick={logout}>Sair</button>
+            </div>
+            <div className="mobile-menu">
+              <button
+                className="mobile-menu-btn"
+                onClick={() => setMenuOpen(o => !o)}
+                aria-label="Menu"
+              >
+                ☰
+              </button>
+              {menuOpen && (
+                <div className="mobile-menu-panel">
+                  <button
+                    className="btnNav btn-map-view"
+                    onClick={() => { setMenuOpen(false); setShowMap('view'); }}
+                  >
+                    👁 Ver Mapa
+                  </button>
+                  {!isViewer && (
+                    <button
+                      className="btnNav btn-map-edit"
+                      onClick={() => { setMenuOpen(false); setShowMap('edit'); }}
+                    >
+                      ✏ Editar Mapa
+                    </button>
+                  )}
+                  {!isViewer && (
+                    <button
+                      className="btnNav btn-batch-qr"
+                      onClick={() => { setMenuOpen(false); setShowBatchQR(true); }}
+                    >
+                      📷 QR Codes
+                    </button>
+                  )}
+                  <button
+                    className="btnNav"
+                    onClick={() => { setMenuOpen(false); if (onSwitchCompany) onSwitchCompany(); }}
+                  >
+                    Trocar empresa
+                  </button>
+                  <button
+                    className="btnLogoff"
+                    onClick={() => { setMenuOpen(false); logout(); }}
+                  >
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -216,16 +279,48 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
                   <p className="empty-message">Nenhum andar cadastrado.</p>
                 )}
                 {andares.map(andar => (
-                  <div key={andar.id} className="company-card" onClick={() => handleSelectAndar(andar)}>
+                  <div
+                    key={andar.id}
+                    className={`company-card${isViewer ? ' company-card-passive company-card-expandable' : ''}`}
+                    onClick={isViewer ? () => setAndarExpandido(andarExpandido === andar.id ? null : andar.id) : () => handleSelectAndar(andar)}
+                  >
+                    {isViewer && (
+                      <span className="rackToggle">{andarExpandido === andar.id ? '▼' : '▶'}</span>
+                    )}
                     <span className="company-card-name">{andar.nome}</span>
-                    <div className="company-card-actions" onClick={e => e.stopPropagation()}>
-                      <button className="btn-edit-company" onClick={() => handleEditAndar(andar)}>Editar</button>
-                      <button className="btn-delete-company" onClick={() => handleDeleteAndar(andar)}>Excluir</button>
-                    </div>
+                    {!isViewer && (
+                      <div className="company-card-actions" onClick={e => e.stopPropagation()}>
+                        <button className="btn-edit-company" onClick={() => handleEditAndar(andar)}>Editar</button>
+                        <button className="btn-delete-company" onClick={() => handleDeleteAndar(andar)}>Excluir</button>
+                      </div>
+                    )}
+                    {isViewer && andarExpandido === andar.id && (
+                      <div className="andarMesas">
+                        {mesas.filter(m => m.andarNome === andar.nome).length === 0 && (
+                          <p className="empty-message">Nenhuma mesa neste andar.</p>
+                        )}
+                        {mesas.filter(m => m.andarNome === andar.nome).map(mesa => (
+                          <div key={mesa.id} className="andarMesa">
+                            <span className="andarMesaNome">{mesa.nome}</span>
+                            <div className="andarMesaPontos">
+                              {mesa.pontos.map(p => {
+                                const resumo = formatPontoResumo(p);
+                                return (
+                                  <span key={p.id} className={`andarPonto${resumo ? ' used' : ''}`}>
+                                    P{p.id}
+                                    {resumo ? ` · ${resumo}` : ' · Livre'}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              {showAddForm ? (
+              {!isViewer && (showAddForm ? (
                 <div className="dashboardInlineForm">
                   <input
                     type="text"
@@ -243,7 +338,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
                 <button className="btn-add-company" onClick={() => setShowAddForm(true)}>
                   + Novo Andar
                 </button>
-              )}
+              ))}
             </div>
 
             <div className="dashboardColumn">
@@ -251,15 +346,18 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany }) {
               <RackListView
                 racks={racks}
                 mesas={mesas}
+                readOnly={isViewer}
                 onEditRack={handleEditRack}
                 onApagarRack={handleApagarRack}
                 onCriarPatchPanel={handleCriarPatchPanel}
                 onApagarPatchPanel={handleApagarPatchPanel}
                 onTogglePortaAtencao={handleTogglePortaAtencao}
               />
-              <button className="btnNovoRack" onClick={handleCriarRack}>
-                + Rack
-              </button>
+              {!isViewer && (
+                <button className="btnNovoRack" onClick={handleCriarRack}>
+                  + Rack
+                </button>
+              )}
             </div>
           </div>
         </div>

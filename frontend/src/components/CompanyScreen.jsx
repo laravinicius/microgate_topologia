@@ -2,16 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { api } from '../api';
-import UserManagement from './UserManagement';
 
-export default function CompanyScreen({ onCompanySelected }) {
-  const { logout, selectCompany, user } = useAuth();
+export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
+  const { logout, selectCompany, isAdmin } = useAuth();
   const { success, error } = useNotification();
   const [empresas, setEmpresas] = useState([]);
-  const [showUsers, setShowUsers] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
-  const [isAdmin] = useState(user === 'admin');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const loadEmpresas = useCallback(async () => {
     try {
@@ -87,23 +85,45 @@ export default function CompanyScreen({ onCompanySelected }) {
           <div className="headerLeft"></div>
           <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
           <div className="headerRight">
-            {isAdmin && (
+            <div className="desktop-nav">
+              {isAdmin && (
+                <button
+                  className="btnLogoff"
+                  onClick={onOpenAdmin}
+                  style={{ background: 'var(--green)' }}
+                >
+                  Administração
+                </button>
+              )}
+              <button className="btnLogoff" onClick={logout}>Sair</button>
+            </div>
+            <div className="mobile-menu">
               <button
-                className="btnLogoff"
-                onClick={() => setShowUsers(!showUsers)}
-                style={{ background: showUsers ? 'var(--blue)' : undefined }}
+                className="mobile-menu-btn"
+                onClick={() => setMenuOpen(o => !o)}
+                aria-label="Menu"
               >
-                Usuários
+                ☰
               </button>
-            )}
-            <button className="btnLogoff" onClick={logout}>Sair</button>
+              {menuOpen && (
+                <div className="mobile-menu-panel">
+                  {isAdmin && (
+                    <button
+                      className="btnLogoff"
+                      onClick={() => { setMenuOpen(false); onOpenAdmin(); }}
+                      style={{ background: 'var(--green)' }}
+                    >
+                      Administração
+                    </button>
+                  )}
+                  <button className="btnLogoff" onClick={() => { setMenuOpen(false); logout(); }}>
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
-        {showUsers && isAdmin && (
-          <div id="usuariosPanel">
-            <UserManagement />
-          </div>
-        )}
         <div className="companyContainer">
           <div className="companyHeader">
             <h1>InfraMap</h1>
@@ -116,10 +136,12 @@ export default function CompanyScreen({ onCompanySelected }) {
             {empresas.map(emp => (
               <div key={emp.id} className="company-card" onClick={() => handleSelect(emp)}>
                 <span className="company-card-name">{emp.nome}</span>
-                <div className="company-card-actions" onClick={e => e.stopPropagation()}>
-                  <button className="btn-edit-company" onClick={() => handleEdit(emp)}>Editar</button>
-                  <button className="btn-delete-company" onClick={() => handleDelete(emp)}>Excluir</button>
-                </div>
+                {isAdmin && (
+                  <div className="company-card-actions" onClick={e => e.stopPropagation()}>
+                    <button className="btn-edit-company" onClick={() => handleEdit(emp)}>Editar</button>
+                    <button className="btn-delete-company" onClick={() => handleDelete(emp)}>Excluir</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -159,11 +181,11 @@ export default function CompanyScreen({ onCompanySelected }) {
                 Cancelar
               </button>
             </div>
-          ) : (
+          ) : isAdmin ? (
             <button className="btn-add-company" onClick={() => setShowAddForm(true)}>
               + Nova Empresa
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

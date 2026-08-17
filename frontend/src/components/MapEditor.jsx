@@ -48,6 +48,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
   const [newRackNome, setNewRackNome] = useState('');
 
   const [showPropPanel, setShowPropPanel] = useState(true);
+  const [hamburguerOpen, setHamburguerOpen] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoElement, setInfoElement] = useState(null);
   const [infoPatchPanel, setInfoPatchPanel] = useState(null);
@@ -593,20 +594,22 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
         <button className="map-btn-voltar" onClick={onVoltar}>← Voltar</button>
         <span className="map-title">🗺 Mapa — {empresaNome}</span>
 
-        <div className="map-andar-tabs">
-          {andares.map(a => (
-            <button
-              key={a.id}
-              className={`map-andar-tab ${activeAndarId === a.id ? 'active' : ''}`}
-              onClick={() => { setActiveAndarId(a.id); setSelectedIds([]); }}
-            >
-              {a.nome}
-            </button>
-          ))}
-          {andares.length === 0 && (
-            <span className="map-andar-tab-disabled">Nenhum andar</span>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="map-andar-tabs">
+            {andares.map(a => (
+              <button
+                key={a.id}
+                className={`map-andar-tab ${activeAndarId === a.id ? 'active' : ''}`}
+                onClick={() => { setActiveAndarId(a.id); setSelectedIds([]); }}
+              >
+                {a.nome}
+              </button>
+            ))}
+            {andares.length === 0 && (
+              <span className="map-andar-tab-disabled">Nenhum andar</span>
+            )}
+          </div>
+        )}
 
         <div className="map-header-actions">
           {!readOnly && (
@@ -628,6 +631,39 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
           )}
         </div>
       </div>
+
+      {readOnly && (
+        <div className="map-hamburger">
+          <button
+            className="map-hamburger-btn"
+            onClick={() => setHamburguerOpen(o => !o)}
+            aria-label="Andares"
+          >
+            ☰
+          </button>
+          <span className="map-hamburger-label">Andares</span>
+          {hamburguerOpen && (
+            <div className="map-hamburger-panel">
+              {andares.map(a => (
+                <button
+                  key={a.id}
+                  className={`map-andar-tab ${activeAndarId === a.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveAndarId(a.id);
+                    setSelectedIds([]);
+                    setHamburguerOpen(false);
+                  }}
+                >
+                  {a.nome}
+                </button>
+              ))}
+              {andares.length === 0 && (
+                <span className="map-andar-tab-disabled">Nenhum andar</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="map-editor-body">
         {/* Canvas */}
