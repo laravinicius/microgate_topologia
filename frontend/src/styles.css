@@ -1520,6 +1520,8 @@ main {
 
 .secaoUsuarios {
     margin-top: 16px;
+    width: 100%;
+    max-width: 600px;
 }
 
 .usuariosContainer {
@@ -1564,7 +1566,8 @@ main {
 .btnAcao {
     width: auto !important;
     margin: 0 !important;
-    padding: 4px 8px !important;
+    height: 28px;
+    padding: 0 8px !important;
     font-size: 0.75rem !important;
     border-radius: 6px;
     background: var(--bg-surface-soft);
@@ -1587,14 +1590,38 @@ main {
 
 .btnSecao {
     background: var(--purple) !important;
-    border: none !important;
+    border: 1px solid rgba(196, 181, 253, 0.42) !important;
     color: white !important;
+    border-radius: var(--radius-sm);
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
     margin-top: 8px;
+    transition: background var(--transition), border-color var(--transition), transform var(--transition);
 }
 
 .btnSecao:hover {
     background: #6d28d9 !important;
+    border-color: rgba(196, 181, 253, 0.5);
     transform: translateY(-1px);
+}
+
+.btnSecundario {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.btnSecundario:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-strong);
 }
 
 .usuarioInfo {
@@ -1606,7 +1633,8 @@ main {
 
 .usuarioPerfilSelect {
     width: auto;
-    padding: 4px 8px;
+    height: 28px;
+    padding: 0 8px;
     font-size: 0.78rem;
     font-family: inherit;
     color: var(--text-soft);

@@ -234,13 +234,8 @@ export default function Administracao({ onVoltar }) {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={handleCreate} className="btnSecao" style={{ flex: 1 }}>Salvar</button>
-                  <button onClick={() => { setShowForm(false); setNewUser(''); setNewPass(''); setNewIsAdmin(false); setNewEmpresas([]); }}
-                    style={{
-                      padding: '10px', borderRadius: 'var(--radius-sm)',
-                      background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                      color: 'var(--text)', font: 'inherit', cursor: 'pointer'
-                    }}>
+                  <button onClick={handleCreate} className="btnSecao">Salvar</button>
+                  <button className="btnSecundario" onClick={() => { setShowForm(false); setNewUser(''); setNewPass(''); setNewIsAdmin(false); setNewEmpresas([]); }}>
                     Cancelar
                   </button>
                 </div>
