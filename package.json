@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "dev:frontend": "cd frontend && npm run dev",
+    "dev:all": "docker compose up -d --build && npm run dev:frontend",
     "build": "cd frontend && npm run build",
     "install:frontend": "cd frontend && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -24,5 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.22.5",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

@@ -4,17 +4,28 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 
 ## Commands
 
-- Backend dev: `npm run dev` (node --watch server.js) · start: `npm start`
+- Full dev: `npm run dev:all` — `docker compose up -d --build` (backend + MySQL em container) e Vite no host (porta 5173).
+- Backend em container isolado: `docker compose up -d --build` · rebuild só da imagem: `docker compose build app`.
+- Backend no host (sem docker, conecta no banco do container via `127.0.0.1:3306`): `npm run dev` (node --watch server.js) · start: `npm start`.
 - Frontend dev: `npm run dev:frontend` (Vite, port 5173) · build: `npm run build` → `frontend/dist/`
 - **No test, lint, or typecheck exist.** `npm test` is a stub that exits 1. Verify by running the app and hitting the endpoint manually.
 - Prod runs under PM2 via `ecosystem.config.js` (name `topologia-server`, port 3005, cwd `/var/www/topologia`).
 
 ## Port / environment reality
 
-- `.env` and PM2 set `PORT=3005` (prod). `server.js` defaults to `3001`.
-- Vite dev proxy (`frontend/vite.config.js`) targets `http://localhost:3001`. So for a working dev backend, run it on 3001 (`PORT=3001 npm run dev`). `.env`'s 3005 is only for the PM2 prod run.
+- `.env` dev seta `PORT=3001` (mesmo default do `server.js`); só o PM2 (prod) usa 3005.
+- Vite dev proxy (`frontend/vite.config.js`) targets `http://localhost:3001`. No fluxo docker, esse 3001 é a API no container; no fluxo host, é `PORT=3001 npm run dev`.
 - CORS allowlist is hardcoded in `server.js` (`topologia.microgateinformatica.com.br`, localhost 3001/5173). Adding a host means editing that array.
 - `frontend/dist/` is served by the backend only when `NODE_ENV=production`.
+
+## Docker (dev only)
+
+- `docker-compose.yml`: serviço `db` (`mysql:8.0`, roda `docker-entrypoint-initdb.d/schema.sql` só quando o volume de dados é novo) e serviço `app` (build `Dockerfile`, `npm run dev` = `node --watch` com hot reload).
+- Imagem do `app` usa `node:20-bookworm-slim` + toolchain de build (build-essential, python3, cairo/pango/jpeg/gif/rsvg dev) porque `canvas` e `bcrypt` são módulos nativos. **Primeiro build é lento;** depois fica em cache.
+- Compose sobrescreve env via `environment:` no serviço `app`: `DB_HOST=db`, `DB_PORT=3306`, `PORT=3001`. O `.env` do host continua com `DB_HOST=127.0.0.1` e vale só pro `npm run dev` no host (porta 3306 exposta pelo container).
+- Bind-mount de `.` em `/app` dá hot reload; volume nomeado `app_node_modules` faz shadow do `node_modules` do host (binários Windows não entram no container). Mudou `package.json`/`package-lock.json`, rode `docker compose build app` (ou `up -d --build`) — recompila nativas dentro do container.
+- `docker compose down` para os containers e mantém dados e deps; `docker compose down -v` apaga o volume do banco E o de `node_modules` (precisa rebuild da imagem depois).
+- `docker compose config` valida o compose sem subir.
 
 ## Backend architecture (`server.js`, single ~1300-line file)
 
@@ -42,4 +53,4 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 - `server.js:1066` hardcodes the prod domain in generated QR URLs (`https://topologia.microgateinformatica.com.br/...`). Dev QR codes point at prod.
 - **QR codes already printed are frozen contracts.** Every generated QR embeds `https://topologia.microgateinformatica.com.br/{empresaNome}?mesa={mesaId}&andar={andarId}` (server.js:1066). Restructuring must keep `/slug?mesa=&andar=` resolving, `findEmpresaBySlug` matching, and mesa IDs stable/stable-mapped. Never change the QR payload or rename/re-purpose mesa IDs.
 - `img/` is served at `/img`; the repo root is also `express.static`'d.
-- `canvas` is a native module — requires build toolchain; `node_modules` for backend and frontend are separate (install both).
+- `canvas` é um módulo nativo — requer toolchain de build. No docker, o `Dockerfile` já instala a toolchain e compila pra Linux; no host, `node_modules` do backend e do frontend são separados (instalar ambos).

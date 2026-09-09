@@ -55,3 +55,7 @@ frontend/.vite/
 .cache/
 .eslintcache
 *.cache
+config.txt
+docker-compose.yml
+.dockerignore
+Dockerfile
