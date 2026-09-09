@@ -71,7 +71,7 @@ npm run build
 
 - `server.js`: API principal
 - `db.js`: conexão com banco
-- `database/migrations/`: migrations SQL
+- `database/schema.sql`: schema único de criação do banco
 - `frontend/`: aplicação React/Vite
 - `img/`: imagens usadas pela interface
 - `ecosystem.config.js`: configuração para PM2
@@ -80,4 +80,4 @@ npm run build
 
 - O frontend usa `frontend/dist/` apenas como saída de build; o diretório não deve ser versionado.
 - Arquivos temporários, logs e sobras de ferramentas de IA devem permanecer fora do Git.
-- Se alterar o schema do banco, revise também as migrations antes de subir para produção.
+- Se alterar o schema do banco, revise também o `database/schema.sql` antes de subir para produção.
