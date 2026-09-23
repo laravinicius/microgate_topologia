@@ -5,7 +5,7 @@ Sistema web para gestão de infraestrutura de rede, com cadastro de empresas, an
 ## Stack
 
 - Backend: Node.js + Express
-- Banco de dados: MySQL
+- Banco de dados: MariaDB remoto
 - Autenticação: JWT + bcrypt
 - Frontend: React + Vite
 - Geração de QR Code: `qrcode`
@@ -15,7 +15,7 @@ Sistema web para gestão de infraestrutura de rede, com cadastro de empresas, an
 
 - Node.js 18+ recomendado
 - npm
-- MySQL acessível pela aplicação
+- MariaDB acessível pela aplicação
 
 ## Instalação
 

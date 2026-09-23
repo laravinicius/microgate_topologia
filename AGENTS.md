@@ -4,9 +4,9 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 
 ## Commands
 
-- Full dev: `npm run dev:all` — `docker compose up -d --build` (backend + MySQL em container) e Vite no host (porta 5173).
+- Full dev: `npm run dev:all` — `docker compose up -d --build` (backend em container) e Vite no host (porta 5173); o backend conecta ao MariaDB configurado no `.env`.
 - Backend em container isolado: `docker compose up -d --build` · rebuild só da imagem: `docker compose build app`.
-- Backend no host (sem docker, conecta no banco do container via `127.0.0.1:3306`): `npm run dev` (node --watch server.js) · start: `npm start`.
+- Backend no host: `npm run dev` (node --watch server.js) · start: `npm start`.
 - Frontend dev: `npm run dev:frontend` (Vite, port 5173) · build: `npm run build` → `frontend/dist/`
 - **No test, lint, or typecheck exist.** `npm test` is a stub that exits 1. Verify by running the app and hitting the endpoint manually.
 - Prod runs under PM2 via `ecosystem.config.js` (name `topologia-server`, port 3005, cwd `/var/www/topologia`).
@@ -20,11 +20,11 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 
 ## Docker (dev only)
 
-- `docker-compose.yml`: serviço `db` (`mysql:8.0`, roda `docker-entrypoint-initdb.d/schema.sql` só quando o volume de dados é novo) e serviço `app` (build `Dockerfile`, `npm run dev` = `node --watch` com hot reload).
+- `docker-compose.yml`: serviço `app` (build `Dockerfile`, `npm run dev` = `node --watch` com hot reload); banco MariaDB é externo e configurado pelo `.env`.
 - Imagem do `app` usa `node:20-bookworm-slim` + toolchain de build (build-essential, python3, cairo/pango/jpeg/gif/rsvg dev) porque `canvas` e `bcrypt` são módulos nativos. **Primeiro build é lento;** depois fica em cache.
-- Compose sobrescreve env via `environment:` no serviço `app`: `DB_HOST=db`, `DB_PORT=3306`, `PORT=3001`. O `.env` do host continua com `DB_HOST=127.0.0.1` e vale só pro `npm run dev` no host (porta 3306 exposta pelo container).
+- Compose lê as variáveis de banco do `.env` e define apenas `PORT=3001` para o serviço `app`.
 - Bind-mount de `.` em `/app` dá hot reload; volume nomeado `app_node_modules` faz shadow do `node_modules` do host (binários Windows não entram no container). Mudou `package.json`/`package-lock.json`, rode `docker compose build app` (ou `up -d --build`) — recompila nativas dentro do container.
-- `docker compose down` para os containers e mantém dados e deps; `docker compose down -v` apaga o volume do banco E o de `node_modules` (precisa rebuild da imagem depois).
+- `docker compose down` para a aplicação e mantém o volume de `node_modules`.
 - `docker compose config` valida o compose sem subir.
 
 ## Backend architecture (`server.js`, single ~1300-line file)

@@ -1,17 +1,9 @@
--- Schema único do InfraMap
--- Cria o banco inteiro do zero: tabelas base + seeds.
--- Executar: mysql < database/schema.sql
--- Idempotente: pode reexecutar sem erro (IF NOT EXISTS / ON DUPLICATE KEY).
--- QR codes já impressos embutem https://topologia.microgateinformatica.com.br/{empresaNome}?mesa={mesaId}&andar={andarId}.
--- Estrutura não pode renomear mesas/empresas de forma a quebrar essas URLs, nem recriar ids de mesa.
-
 CREATE DATABASE IF NOT EXISTS inframap
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
 USE inframap;
 
--- Usuários do sistema (admin e visualizadores)
 CREATE TABLE IF NOT EXISTS `users` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `username` VARCHAR(80) NOT NULL,
@@ -23,7 +15,6 @@ CREATE TABLE IF NOT EXISTS `users` (
     UNIQUE KEY `uq_users_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Empresas (multi-tenant)
 CREATE TABLE IF NOT EXISTS `empresas` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `nome` VARCHAR(120) NOT NULL,
@@ -32,7 +23,6 @@ CREATE TABLE IF NOT EXISTS `empresas` (
     UNIQUE KEY `uq_empresas_nome` (`nome`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Andares/setores por empresa
 CREATE TABLE IF NOT EXISTS `andares` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `empresa_id` INT UNSIGNED NOT NULL,
@@ -45,7 +35,6 @@ CREATE TABLE IF NOT EXISTS `andares` (
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Racks (independentes de andar)
 CREATE TABLE IF NOT EXISTS `racks` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `nome` VARCHAR(120) NOT NULL,
@@ -58,7 +47,6 @@ CREATE TABLE IF NOT EXISTS `racks` (
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Patch panels dentro de racks
 CREATE TABLE IF NOT EXISTS `patch_panels` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `rack_id` INT UNSIGNED NOT NULL,
@@ -73,7 +61,6 @@ CREATE TABLE IF NOT EXISTS `patch_panels` (
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Mesas do mapa (vinculadas a empresa e andar)
 CREATE TABLE IF NOT EXISTS `mesas` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `nome` VARCHAR(120) NOT NULL,
@@ -96,7 +83,6 @@ CREATE TABLE IF NOT EXISTS `mesas` (
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Portas de conexão das mesas (id = mesa_id * 100 + numero)
 CREATE TABLE IF NOT EXISTS `mesa_pontos` (
     `id` INT UNSIGNED NOT NULL,
     `mesa_id` INT UNSIGNED NOT NULL,
@@ -119,7 +105,6 @@ CREATE TABLE IF NOT EXISTS `mesa_pontos` (
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Elementos livres do mapa (mesa, rack, objeto)
 CREATE TABLE IF NOT EXISTS `map_elements` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `empresa_id` INT UNSIGNED NOT NULL,
@@ -146,7 +131,6 @@ CREATE TABLE IF NOT EXISTS `map_elements` (
         FOREIGN KEY (`andar_id`) REFERENCES `andares` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Acesso de visualizadores às empresas (admins veem tudo, sem registros aqui)
 CREATE TABLE IF NOT EXISTS `user_empresas` (
     `user_id` INT UNSIGNED NOT NULL,
     `empresa_id` INT UNSIGNED NOT NULL,
@@ -157,13 +141,11 @@ CREATE TABLE IF NOT EXISTS `user_empresas` (
         FOREIGN KEY (`empresa_id`) REFERENCES `empresas` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Seeds iniciais
 INSERT INTO `empresas` (`id`, `nome`) VALUES (1, 'WAP')
 ON DUPLICATE KEY UPDATE `nome` = 'WAP';
 
 INSERT INTO `andares` (`id`, `empresa_id`, `nome`) VALUES (1, 1, '3 andar')
 ON DUPLICATE KEY UPDATE `nome` = '3 andar';
 
--- Admin padrão. Troque a senha no primeiro login.
 INSERT INTO `users` (`id`, `username`, `password_hash`, `is_admin`) VALUES (1, 'admin', '$2b$08$1xi0k./Chpsw7lW.YdZdF.E8E2C.MAQEBGEYIJWG8C1zstZl97QT2', 1)
 ON DUPLICATE KEY UPDATE `username` = 'admin';
