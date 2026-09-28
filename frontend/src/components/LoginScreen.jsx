@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function LoginScreen() {
+export default function LoginScreen({ onDemo }) {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -48,6 +48,9 @@ export default function LoginScreen() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+        <button type="button" className="btnDemo" onClick={onDemo}>
+          Ver demonstração
+        </button>
         <p className="loginError">{error}</p>
       </div>
     </div>

@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    container_name: inframap-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - app_node_modules:/app/node_modules
+    command: npm run dev
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: inframap-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_PROXY_TARGET: http://app:3001
+    depends_on:
+      - app
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+volumes:
+  app_node_modules:
+  frontend_node_modules:

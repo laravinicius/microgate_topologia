@@ -18,7 +18,7 @@ function snap(val) {
   return Math.round(val / GRID) * GRID;
 }
 
-export default function MapEditor({ onVoltar, readOnly = false }) {
+export default function MapEditor({ onVoltar, readOnly = false, demoData = null }) {
   const { empresaId, empresaNome } = useAuth();
   const { success, error: showError } = useNotification();
 
@@ -69,6 +69,11 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
 
   // --- Load data ---
   const loadAndares = useCallback(async () => {
+    if (demoData) {
+      setAndares(demoData.andares);
+      setActiveAndarId(current => current ?? demoData.andares[0]?.id ?? null);
+      return;
+    }
     try {
       const data = await api.get('/api/andares');
       if (data.success) {
@@ -78,9 +83,14 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
     } catch {
       showError('Erro ao carregar andares');
     }
-  }, [showError]);
+  }, [demoData, showError]);
 
   const loadMesas = useCallback(async (andarId) => {
+    if (demoData) {
+      setMesas(demoData.mesas.filter(mesa => !andarId || mesa.andarId === andarId));
+      setRacks(demoData.racks);
+      return;
+    }
     try {
       const url = andarId ? `/api/racks?andarId=${andarId}` : '/api/racks';
       const data = await api.get(url);
@@ -91,9 +101,13 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
     } catch {
       // ignore
     }
-  }, []);
+  }, [demoData]);
 
   const loadElements = useCallback(async (andarId) => {
+    if (demoData) {
+      setElements(demoData.elements.filter(element => !andarId || element.andarId === andarId));
+      return;
+    }
     try {
       const url = andarId ? `/api/map-elements?andarId=${andarId}` : '/api/map-elements';
       const data = await api.get(url);
@@ -108,7 +122,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
     } catch {
       showError('Erro ao carregar elementos');
     }
-  }, [showError]);
+  }, [demoData, showError]);
 
   useEffect(() => {
     loadAndares();
@@ -175,9 +189,22 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
     try {
       const rack = racks.find(r => r.nome === infoElement?.nome);
       if (rack) {
-        const data = await api.get(`/api/rack-connections?rackId=${rack.id}&patchId=${pp.id}`);
-        if (data.success) {
-          setRackConnections(data.connections || []);
+        if (demoData) {
+          const connections = demoData.mesas.flatMap(mesa =>
+            mesa.pontos
+              .filter(ponto => ponto.rackId === rack.id && ponto.patchId === pp.id && ponto.porta)
+              .map(ponto => ({
+                porta: ponto.porta,
+                mesaNome: mesa.nome,
+                andarNome: mesa.andarNome,
+                pontoId: ponto.id,
+                atencao: Boolean(ponto.atencao),
+              }))
+          );
+          setRackConnections(connections);
+        } else {
+          const data = await api.get(`/api/rack-connections?rackId=${rack.id}&patchId=${pp.id}`);
+          if (data.success) setRackConnections(data.connections || []);
         }
       }
     } catch {
@@ -185,7 +212,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
     } finally {
       setRackConnectionsLoading(false);
     }
-  }, [racks, infoElement]);
+  }, [demoData, racks, infoElement]);
 
   const backToRack = useCallback(() => {
     setInfoPatchPanel(null);
@@ -592,7 +619,7 @@ export default function MapEditor({ onVoltar, readOnly = false }) {
       {/* Header */}
       <div className="map-editor-header">
         <button className="map-btn-voltar" onClick={onVoltar}>← Voltar</button>
-        <span className="map-title">🗺 Mapa — {empresaNome}</span>
+        <span className="map-title">🗺 Mapa — {demoData?.empresaNome || empresaNome}</span>
 
         {!readOnly && (
           <div className="map-andar-tabs">

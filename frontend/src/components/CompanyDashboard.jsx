@@ -7,7 +7,7 @@ import MapEditor from './MapEditor';
 import QRCodeBatchPrint from './QRCodeBatchPrint';
 import { api } from '../api';
 
-export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isViewer = false }) {
+export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isViewer = false, demoData = null }) {
   const { empresaNome, andarNome, selectAndar, logout } = useAuth();
   const { success, error } = useNotification();
   const prompt = usePrompt();
@@ -21,17 +21,28 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
   const [racks, setRacks] = useState([]);
   const [mesas, setMesas] = useState([]);
   const [andarExpandido, setAndarExpandido] = useState(null);
+  const isDemo = Boolean(demoData);
+  const nomeEmpresa = demoData?.empresaNome || empresaNome;
 
   const loadAndares = useCallback(async () => {
+    if (demoData) {
+      setAndares(demoData.andares);
+      return;
+    }
     try {
       const data = await api.get('/api/andares');
       if (data.success) setAndares(data.andares);
     } catch {
       error('Erro ao carregar andares');
     }
-  }, [error]);
+  }, [demoData, error]);
 
   const loadRacks = useCallback(async () => {
+    if (demoData) {
+      setRacks(demoData.racks);
+      setMesas(demoData.mesas);
+      return;
+    }
     try {
       const data = await api.get('/api/racks');
       if (data.success) {
@@ -41,7 +52,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
     } catch {
       error('Erro ao carregar racks');
     }
-  }, [error]);
+  }, [demoData, error]);
 
   useEffect(() => {
     loadAndares();
@@ -190,7 +201,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
   };
 
   if (showMap) {
-    return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} />;
+    return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} demoData={demoData} />;
   }
 
   if (showBatchQR) {
@@ -213,8 +224,8 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
               {!isViewer && (
                 <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
               )}
-              <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>Trocar empresa</button>
-              <button className="btnLogoff" onClick={logout}>Sair</button>
+              <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>{isDemo ? 'Sair da demonstração' : 'Trocar empresa'}</button>
+              {!isDemo && <button className="btnLogoff" onClick={logout}>Sair</button>}
             </div>
             <div className="mobile-menu">
               <button
@@ -252,14 +263,16 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
                     className="btnNav"
                     onClick={() => { setMenuOpen(false); if (onSwitchCompany) onSwitchCompany(); }}
                   >
-                    Trocar empresa
+                    {isDemo ? 'Sair da demonstração' : 'Trocar empresa'}
                   </button>
-                  <button
-                    className="btnLogoff"
-                    onClick={() => { setMenuOpen(false); logout(); }}
-                  >
-                    Sair
-                  </button>
+                  {!isDemo && (
+                    <button
+                      className="btnLogoff"
+                      onClick={() => { setMenuOpen(false); logout(); }}
+                    >
+                      Sair
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -268,7 +281,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
 
         <div className="dashboardContainer">
           <div className="dashboardHeader">
-            <h1>{empresaNome}</h1>
+            <h1>{nomeEmpresa}</h1>
           </div>
 
           <div className="dashboardColumns">

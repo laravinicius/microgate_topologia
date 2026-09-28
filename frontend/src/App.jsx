@@ -13,6 +13,7 @@ import DetalhesPatch from './components/DetalhesPatch';
 import PublicMapViewer from './components/PublicMapViewer';
 import QRCodeModal from './components/QRCodeModal';
 import { api, getToken } from './api';
+import { DEMO_DATA } from './data/demoData';
 
 const MESA_LARGURA = 240;
 const PONTOS_PADRAO = 8;
@@ -111,6 +112,7 @@ function AppContent() {
   const prompt = usePrompt();
 
   const [showAdmin, setShowAdmin] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
   const [data, setData] = useState({ mesas: [], racks: [] });
 
   const [vinculo, setVinculo] = useState(null);
@@ -360,7 +362,10 @@ function AppContent() {
   }, [carregarDadosServidor]);
 
   if (loading) return null;
-  if (!user) return <LoginScreen />;
+  if (!user && demoMode) {
+    return <CompanyDashboard isViewer demoData={DEMO_DATA} onSwitchCompany={() => setDemoMode(false)} />;
+  }
+  if (!user) return <LoginScreen onDemo={() => setDemoMode(true)} />;
   if (showAdmin && isAdmin) return <Administracao onVoltar={() => setShowAdmin(false)} />;
   if (!empresaId) {
     return <CompanyScreen onOpenAdmin={() => setShowAdmin(true)} />;

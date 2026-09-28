@@ -4,8 +4,9 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 
 ## Commands
 
-- Full dev: `npm run dev:all` — `docker compose up -d --build` (backend em container) e Vite no host (porta 5173); o backend conecta ao MariaDB configurado no `.env`.
-- Backend em container isolado: `docker compose up -d --build` · rebuild só da imagem: `docker compose build app`.
+- Full dev: `npm run dev:all` — `docker compose up -d --build` (API e Vite em containers; web na porta 5173); a API conecta ao MariaDB configurado no `.env`.
+- Parar dev: `npm run dev:stop` ou `docker compose down`.
+- API em container isolado: `docker compose up -d --build app` · rebuild só da imagem: `docker compose build app`.
 - Backend no host: `npm run dev` (node --watch server.js) · start: `npm start`.
 - Frontend dev: `npm run dev:frontend` (Vite, port 5173) · build: `npm run build` → `frontend/dist/`
 - **No test, lint, or typecheck exist.** `npm test` is a stub that exits 1. Verify by running the app and hitting the endpoint manually.
@@ -14,17 +15,17 @@ InfraMap: network-infrastructure map for companies/floors/tables/racks, multi-te
 ## Port / environment reality
 
 - `.env` dev seta `PORT=3001` (mesmo default do `server.js`); só o PM2 (prod) usa 3005.
-- Vite dev proxy (`frontend/vite.config.js`) targets `http://localhost:3001`. No fluxo docker, esse 3001 é a API no container; no fluxo host, é `PORT=3001 npm run dev`.
+- Vite dev proxy (`frontend/vite.config.js`) usa `http://localhost:3001` no host e `http://app:3001` no container (`VITE_API_PROXY_TARGET`).
 - CORS allowlist is hardcoded in `server.js` (`topologia.microgateinformatica.com.br`, localhost 3001/5173). Adding a host means editing that array.
 - `frontend/dist/` is served by the backend only when `NODE_ENV=production`.
 
 ## Docker (dev only)
 
-- `docker-compose.yml`: serviço `app` (build `Dockerfile`, `npm run dev` = `node --watch` com hot reload); banco MariaDB é externo e configurado pelo `.env`.
+- `docker-compose.yml`: serviço `app` (API, build `Dockerfile`) e `web` (Vite, build `frontend/Dockerfile`); banco MariaDB é externo e configurado pelo `.env`.
 - Imagem do `app` usa `node:20-bookworm-slim` + toolchain de build (build-essential, python3, cairo/pango/jpeg/gif/rsvg dev) porque `canvas` e `bcrypt` são módulos nativos. **Primeiro build é lento;** depois fica em cache.
-- Compose lê as variáveis de banco do `.env` e define apenas `PORT=3001` para o serviço `app`.
-- Bind-mount de `.` em `/app` dá hot reload; volume nomeado `app_node_modules` faz shadow do `node_modules` do host (binários Windows não entram no container). Mudou `package.json`/`package-lock.json`, rode `docker compose build app` (ou `up -d --build`) — recompila nativas dentro do container.
-- `docker compose down` para a aplicação e mantém o volume de `node_modules`.
+- Compose lê as variáveis de banco do `.env`, publica `app` na porta 3001 e `web` na porta 5173.
+- Bind-mounts de `.` em `/app` e `./frontend` em `/app` dão hot reload; volumes nomeados `app_node_modules` e `frontend_node_modules` isolam dependências dos binários Windows do host. Mudou `package.json`/`package-lock.json`, reconstrua o serviço correspondente (`docker compose up -d --build app` ou `web`).
+- `docker compose down` para os serviços e mantém os volumes de `node_modules`.
 - `docker compose config` valida o compose sem subir.
 
 ## Backend architecture (`server.js`, single ~1300-line file)

@@ -59,3 +59,7 @@ config.txt
 docker-compose.yml
 .dockerignore
 Dockerfile
+!docker-compose.yml
+!.dockerignore
+!/Dockerfile
+!frontend/Dockerfile
