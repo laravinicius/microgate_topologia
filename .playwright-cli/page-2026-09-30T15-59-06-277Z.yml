@@ -1,0 +1,28 @@
+- generic [ref=f2e14]:
+  - generic [ref=f2e15]:
+    - button "← Voltar" [ref=f2e16] [cursor=pointer]
+    - generic [ref=f2e17]: Planta / Empresa Demonstração
+    - generic [ref=f2e18]:
+      - generic [ref=f2e19]:
+        - button "Planta" [ref=f2e20] [cursor=pointer]
+        - button "Racks" [ref=f2e21] [cursor=pointer]
+        - button "Pontos" [ref=f2e22] [cursor=pointer]
+      - generic [ref=f2e23]: 👁 Visualização
+  - generic [ref=f2e24]:
+    - button "Andares" [ref=f2e25] [cursor=pointer]: ☰
+    - generic [ref=f2e26]: Andares
+  - generic [ref=f2e27]:
+    - generic [ref=f2e29]:
+      - generic [ref=f2e30] [cursor=pointer]: Mesa 01
+      - generic [ref=f2e32] [cursor=pointer]: Mesa 02
+      - generic [ref=f2e34] [cursor=pointer]: Mesa 03
+      - generic [ref=f2e36] [cursor=pointer]: Mesa 04
+      - generic [ref=f2e38] [cursor=pointer]: Mesa 05
+      - generic [ref=f2e40] [cursor=pointer]: Rack Principal
+      - generic [ref=f2e42] [cursor=pointer]: Área de trabalho
+    - generic [ref=f2e44]:
+      - button "+" [ref=f2e45] [cursor=pointer]
+      - generic [ref=f2e46]: 100%
+      - button "−" [ref=f2e47] [cursor=pointer]
+      - button "⟲" [ref=f2e48] [cursor=pointer]
+      - button "⤡" [ref=f2e49] [cursor=pointer]
