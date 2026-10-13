@@ -1,169 +1,65 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './components/Notification';
 import { PromptProvider, usePrompt } from './components/PromptModal';
 import LoginScreen from './components/LoginScreen';
 import CompanyScreen from './components/CompanyScreen';
 import CompanyDashboard from './components/CompanyDashboard';
-import Header from './components/Header';
 import Administracao from './components/Administracao';
+import AuthenticatedShell from './components/AuthenticatedShell';
 
 import VinculoPanel from './components/VinculoPanel';
-import DetalhesPatch from './components/DetalhesPatch';
 import PublicMapViewer from './components/PublicMapViewer';
 import QRCodeModal from './components/QRCodeModal';
 import { api, getToken } from './api';
 import { DEMO_DATA } from './data/demoData';
 
-const MESA_LARGURA = 240;
-const PONTOS_PADRAO = 8;
-const MESA_ALTURA_PADRAO = 480;
-const COLS = 2;
-const MESA_GAP = 20;
-const MESA_PADDING = 20;
-
-function getMesaAltura(qtdPontos) {
-  const pontoAltura = 48;
-  const gap = 4;
-  const paddingGrade = 24;
-  const tituloAltura = 68;
-  return Math.max(120, qtdPontos * pontoAltura + (qtdPontos - 1) * gap + paddingGrade + tituloAltura);
-}
-
-function getMesaX(col) {
-  return MESA_PADDING + col * (MESA_LARGURA + MESA_GAP);
-}
-
-function checkOverlap(x1, y1, h1, x2, y2, h2) {
-  if (x1 + MESA_LARGURA <= x2 || x2 + MESA_LARGURA <= x1) return false;
-  if (y1 + h1 <= y2 || y2 + h2 <= y1) return false;
-  return true;
-}
-
-function encontrarYLivre(col, yInicial, mesasOcupadas, h) {
-  let y = yInicial;
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const m of mesasOcupadas) {
-      const colM = Math.round((m.x - MESA_PADDING) / (MESA_LARGURA + MESA_GAP));
-      if (colM !== col) continue;
-      if (y + h > m.y && m.y + m.altura > y) {
-        y = m.y + m.altura + MESA_GAP;
-        changed = true;
-      }
-    }
-  }
-  return y;
-}
-
-function calcularPosicoes(mesas) {
-  const fixadas = mesas.filter(m => m.fixada).map(m => ({
-    x: m.x, y: m.y, altura: getMesaAltura(m.pontos.length), fixada: true
-  }));
-
-  const naoFixadas = mesas.filter(m => !m.fixada);
-  const colY = [20, 20];
-  const posicoes = [];
-
-  for (const m of naoFixadas) {
-    const col = posicoes.length % COLS;
-    const h = getMesaAltura(m.pontos.length);
-    let y = colY[col];
-
-    y = encontrarYLivre(col, y, fixadas, h);
-
-    const x = getMesaX(col);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const fp of fixadas) {
-        if (checkOverlap(x, y, h, fp.x, fp.y, fp.altura)) {
-          y = fp.y + fp.altura + MESA_GAP;
-          changed = true;
-        }
-      }
-      for (const pp of posicoes) {
-        if (checkOverlap(x, y, h, pp.x, pp.y, pp.altura)) {
-          y = pp.y + pp.altura + MESA_GAP;
-          changed = true;
-        }
-      }
-    }
-
-    colY[col] = y + h + MESA_GAP;
-    posicoes.push({ x, y, altura: h });
-  }
-
-  const resultado = [];
-  let naoFixIdx = 0;
-  for (const m of mesas) {
-    if (m.fixada) {
-      resultado.push({ x: m.x, y: m.y, altura: getMesaAltura(m.pontos.length) });
-    } else {
-      resultado.push(posicoes[naoFixIdx++]);
-    }
-  }
-  return resultado;
-}
-
 function AppContent() {
-  const { user, isAdmin, loading, empresaId, empresaNome, andarId, clearAndar, clearEmpresa } = useAuth();
+  const { user, isAdmin, loading, empresaId, empresaNome, andarId, andarNome, clearAndar, clearEmpresa, logout } = useAuth();
   const prompt = usePrompt();
 
   const [showAdmin, setShowAdmin] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [data, setData] = useState({ mesas: [], racks: [] });
+  const [dataStatus, setDataStatus] = useState('idle');
+  const [dataContext, setDataContext] = useState(null);
+  const currentDataContext = empresaId && andarId ? `${empresaId}:${andarId}` : null;
+  const visibleDataStatus = dataContext === currentDataContext ? dataStatus : 'loading';
 
   const [vinculo, setVinculo] = useState(null);
-  const [detalhesPatch, setDetalhesPatch] = useState(null);
   const [qrcodeMesa, setQrcodeMesa] = useState(null);
-
-  const mapaRef = useRef(null);
-  const [mapaWidth, setMapaWidth] = useState(0);
-
-  useEffect(() => {
-    if (!andarId) return;
-    const el = mapaRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      setMapaWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    setMapaWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, [andarId]);
+  const dataRequestRef = useRef(0);
 
   const carregarDadosServidor = useCallback(async () => {
+    const requestId = ++dataRequestRef.current;
+    if (!empresaId || !andarId) {
+      setData({ mesas: [], racks: [] });
+      setDataContext(null);
+      setDataStatus('idle');
+      return;
+    }
+
+    setDataContext(`${empresaId}:${andarId}`);
+    setDataStatus('loading');
     try {
       const res = await api.get('/api/data');
-      const posicoes = calcularPosicoes(res.mesas || []);
-      const mesas = (res.mesas || []).map((m, i) => {
-        const pos = posicoes[i];
-        return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
-      });
-      setData({ mesas, racks: res.racks || [], allMesas: res.allMesas || [] });
+      if (requestId !== dataRequestRef.current) return;
+      if (!res.success) throw new Error(res.message || 'Falha ao carregar dados do andar.');
+      setData({ mesas: res.mesas || [], racks: res.racks || [], allMesas: res.allMesas || [] });
+      setDataStatus('ready');
     } catch {
+      if (requestId !== dataRequestRef.current) return;
+      setData({ mesas: [], racks: [], allMesas: [] });
+      setDataStatus('error');
     }
-  }, []);
-
-  const offsetX = useMemo(() => {
-    if (mapaWidth === 0 || data.mesas.length === 0) return 0;
-    let maxRight = 0;
-    for (const m of data.mesas) {
-      const right = m.x + MESA_LARGURA;
-      if (right > maxRight) maxRight = right;
-    }
-    const padding = 20;
-    const available = mapaWidth - padding * 2;
-    return Math.floor(Math.max(0, (available - maxRight) / 2));
-  }, [data.mesas, mapaWidth]);
+  }, [empresaId, andarId]);
 
   useEffect(() => {
-    if (user && empresaId && andarId) {
-      carregarDadosServidor();
-    }
-  }, [user, empresaId, andarId, carregarDadosServidor]);
+    setData({ mesas: [], racks: [], allMesas: [] });
+    setVinculo(null);
+    setQrcodeMesa(null);
+    carregarDadosServidor();
+  }, [empresaId, andarId, carregarDadosServidor]);
 
   useEffect(() => {
     if (!user) {
@@ -172,7 +68,7 @@ function AppContent() {
   }, [user]);
 
   useEffect(() => {
-    if (!empresaId || !user) return;
+    if (!empresaId || !andarId || !user) return;
     const token = getToken();
     if (!token) return;
 
@@ -202,12 +98,7 @@ function AppContent() {
     };
     const prev = data;
     const mesas = [...prev.mesas, novaMesa];
-    const posicoes = calcularPosicoes(mesas);
-    const reorganizadas = mesas.map((m, i) => {
-      const pos = posicoes[i];
-      return { ...m, x: pos.x, y: pos.y, _altura: pos.altura };
-    });
-    const newData = { ...prev, mesas: reorganizadas };
+    const newData = { ...prev, mesas };
     setData(newData);
     try {
       await api.put('/api/data', newData);
@@ -357,10 +248,6 @@ function AppContent() {
     clearEmpresa();
   }, [clearEmpresa]);
 
-  const handleAndarSelected = useCallback(() => {
-    carregarDadosServidor();
-  }, [carregarDadosServidor]);
-
   if (loading) return null;
   if (!user && demoMode) {
     return <CompanyDashboard isViewer demoData={DEMO_DATA} onSwitchCompany={() => setDemoMode(false)} />;
@@ -374,27 +261,45 @@ function AppContent() {
     return <CompanyDashboard isViewer onSwitchCompany={handleSwitchCompany} />;
   }
   if (!andarId) {
-    return <CompanyDashboard onAndarSelected={handleAndarSelected} onSwitchCompany={handleSwitchCompany} />;
+    return <CompanyDashboard onSwitchCompany={handleSwitchCompany} onOpenAdmin={() => setShowAdmin(true)} />;
   }
 
   return (
+    <AuthenticatedShell
+      title={andarNome || 'Mapa'}
+      context={empresaNome || 'Empresa'}
+      items={[
+        { label: 'Andares', onClick: clearAndar },
+        { label: 'Trocar empresa', onClick: handleSwitchCompany }
+      ]}
+      accountItems={[
+        { label: 'Administração', onClick: () => setShowAdmin(true) },
+        { label: 'Sair', onClick: logout, danger: true }
+      ]}
+      className="map-canvas-shell"
+    >
     <div id="appContainer">
-      <Header
-        onSwitchCompany={handleSwitchCompany}
-        onVoltarAndares={clearAndar}
-      />
       <div className="container">
         <main>
-          <div className="mesasToolbar">
+          {visibleDataStatus === 'loading' ? (
+            <p className="empty-message" role="status">Carregando mesas e pontos de {andarNome || 'este andar'}…</p>
+          ) : visibleDataStatus === 'error' ? (
+            <div className="empty-message" role="alert">
+              <p>Não foi possível carregar os dados deste andar.</p>
+              <button type="button" onClick={carregarDadosServidor}>Tentar novamente</button>
+            </div>
+          ) : visibleDataStatus === 'ready' && data.mesas.length === 0 ? (
+            <p className="empty-message" role="status">Nenhuma mesa cadastrada em {andarNome || 'este andar'}.</p>
+          ) : null}
+          {visibleDataStatus === 'ready' && <div className="mesasToolbar">
             <button id="novaMesa" onClick={handleCriarMesa}>+ Mesa</button>
-          </div>
-          <div id="mapa" ref={mapaRef}>
+          </div>}
+          {visibleDataStatus === 'ready' && <div id="mapa">
             {data.mesas.map(mesa => {
               return (
               <div
                 key={mesa.id}
                 className="mesa"
-                style={{ left: (mesa.x + offsetX) + 'px', top: mesa.y + 'px' }}
                 data-mesa-id={mesa.id}
               >
                 <div className="tituloMesa">
@@ -431,7 +336,7 @@ function AppContent() {
                </div>
               );
             })}
-          </div>
+          </div>}
         </main>
       </div>
 
@@ -450,14 +355,6 @@ function AppContent() {
         />
       )}
 
-      {detalhesPatch && (
-        <DetalhesPatch
-          detalhes={detalhesPatch}
-          racks={data.racks}
-          onClose={() => setDetalhesPatch(null)}
-        />
-      )}
-
       {qrcodeMesa && (
         <QRCodeModal
           mesa={qrcodeMesa}
@@ -467,6 +364,7 @@ function AppContent() {
         />
       )}
     </div>
+    </AuthenticatedShell>
   );
 }
 

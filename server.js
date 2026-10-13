@@ -228,24 +228,32 @@ app.post('/api/auth/select-company', requireAuth, async (req, res) => {
 });
 
 app.post('/api/auth/select-andar', requireAuth, requireEmpresa, async (req, res) => {
-  const { andarId } = req.body;
-  if (!andarId) {
+  const andarId = req.body?.andarId;
+  const id = typeof andarId === 'number'
+    ? andarId
+    : typeof andarId === 'string' && /^[1-9]\d*$/.test(andarId)
+      ? Number(andarId)
+      : Number.NaN;
+  if (!Number.isSafeInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: 'Dados inválidos' });
   }
 
   try {
-    const [rows] = await db.query('SELECT nome FROM andares WHERE id = ? AND empresa_id = ?', [andarId, req.user.empresaId]);
+    const [rows] = await db.query('SELECT nome FROM andares WHERE id = ? AND empresa_id = ?', [id, req.user.empresaId]);
     const andarNome = rows.length > 0 ? rows[0].nome : null;
+    if (!andarNome) {
+      return res.status(404).json({ success: false, message: 'Andar não encontrado nesta empresa' });
+    }
 
     const token = signToken({
       username: req.user.username,
       userId: req.user.userId,
       isAdmin: req.user.isAdmin,
       empresaId: req.user.empresaId,
-      andarId: Number(andarId)
+      andarId: id
     });
 
-    res.json({ success: true, token, andarId: Number(andarId), andarNome });
+    res.json({ success: true, token, andarId: id, andarNome });
   } catch (error) {
     console.error('Erro ao selecionar andar:', error);
     res.status(500).json({ success: false, message: 'Erro interno' });

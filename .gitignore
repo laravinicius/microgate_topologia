@@ -50,6 +50,7 @@ dist/
 build/
 frontend/dist/
 frontend/.vite/
+.playwright-cli/
 
 # Cache / temp
 .cache/

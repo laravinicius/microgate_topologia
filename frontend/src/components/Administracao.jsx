@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { api } from '../api';
+import AuthenticatedShell from './AuthenticatedShell';
 
 export default function Administracao({ onVoltar }) {
   const { logout } = useAuth();
@@ -109,20 +110,15 @@ export default function Administracao({ onVoltar }) {
   };
 
   return (
+    <AuthenticatedShell
+      title="Administração"
+      context="Usuários e permissões"
+      items={[{ label: 'Empresas', onClick: onVoltar }]}
+      accountItems={[{ label: 'Sair', onClick: logout, danger: true }]}
+      className="administration-shell"
+    >
     <div className="companyScreenWrapper">
       <div className="companyScreen">
-        <header>
-          <div className="headerLeft desktop-nav">
-            <button className="btnLogoff" onClick={onVoltar}>← Empresas</button>
-          </div>
-          <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
-          <div className="headerRight">
-            <div className="desktop-nav">
-              <button className="btnLogoff" onClick={logout}>Sair</button>
-            </div>
-          </div>
-        </header>
-
         <div className="companyContainer">
           <div className="companyHeader">
             <h1>Administração</h1>
@@ -247,5 +243,6 @@ export default function Administracao({ onVoltar }) {
         </div>
       </div>
     </div>
+    </AuthenticatedShell>
   );
 }

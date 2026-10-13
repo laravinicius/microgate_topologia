@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { usePrompt } from './PromptModal';
@@ -6,23 +6,37 @@ import RackListView from './RackListView';
 import MapEditor from './MapEditor';
 import QRCodeBatchPrint from './QRCodeBatchPrint';
 import { api } from '../api';
+import AuthenticatedShell from './AuthenticatedShell';
 
-export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isViewer = false, demoData = null }) {
+export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewer = false, demoData = null }) {
   const { empresaNome, andarNome, selectAndar, logout } = useAuth();
   const { success, error } = useNotification();
   const prompt = usePrompt();
 
   const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
   const [showBatchQR, setShowBatchQR] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [andares, setAndares] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [racks, setRacks] = useState([]);
   const [mesas, setMesas] = useState([]);
   const [andarExpandido, setAndarExpandido] = useState(null);
+  const [selecionandoAndarId, setSelecionandoAndarId] = useState(null);
+  const selecaoAndarEmAndamento = useRef(false);
   const isDemo = Boolean(demoData);
   const nomeEmpresa = demoData?.empresaNome || empresaNome;
+  const shellItems = [
+    { label: 'Ver mapa', onClick: () => setShowMap('view') },
+    ...(!isViewer ? [
+      { label: 'Editar mapa', onClick: () => setShowMap('edit') },
+      { label: 'QR Codes', onClick: () => setShowBatchQR(true) }
+    ] : []),
+    { label: isDemo ? 'Sair da demonstração' : 'Trocar empresa', onClick: onSwitchCompany }
+  ];
+  const accountItems = [
+    ...(!isDemo && onOpenAdmin ? [{ label: 'Administração', onClick: onOpenAdmin }] : []),
+    ...(!isDemo ? [{ label: 'Sair', onClick: logout, danger: true }] : [])
+  ];
 
   const loadAndares = useCallback(async () => {
     if (demoData) {
@@ -60,14 +74,21 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
   }, [loadAndares, loadRacks]);
 
   const handleSelectAndar = async (andar) => {
+    if (selecaoAndarEmAndamento.current) return;
+    selecaoAndarEmAndamento.current = true;
+    setSelecionandoAndarId(andar.id);
     try {
       const data = await selectAndar(andar.id);
       if (data.success) {
         success(`Andar "${andar.nome}" selecionado`);
-        if (onAndarSelected) onAndarSelected();
+      } else {
+        error(data.message || 'Não foi possível selecionar este andar.');
       }
     } catch {
       error('Erro ao selecionar andar');
+    } finally {
+      selecaoAndarEmAndamento.current = false;
+      setSelecionandoAndarId(null);
     }
   };
 
@@ -201,84 +222,46 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
   };
 
   if (showMap) {
-    return <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} demoData={demoData} />;
+    return (
+      <AuthenticatedShell
+        title={nomeEmpresa || 'Mapa'}
+        context={showMap === 'view' ? 'Visualização do mapa' : 'Edição do mapa'}
+        items={[
+          { label: 'Voltar ao painel', onClick: () => setShowMap(null) },
+          ...(!isDemo ? [{ label: 'Trocar empresa', onClick: onSwitchCompany }] : [])
+        ]}
+        accountItems={accountItems}
+        className="dashboard-shell map-workspace-shell"
+      >
+        <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} demoData={demoData} />
+      </AuthenticatedShell>
+    );
   }
 
   if (showBatchQR) {
-    return <QRCodeBatchPrint empresaSlug={empresaNome} onClose={() => setShowBatchQR(false)} />;
+    return (
+      <AuthenticatedShell
+        title={nomeEmpresa || 'QR Codes'}
+        context="Impressão de QR Codes"
+        items={[{ label: 'Voltar ao painel', onClick: () => setShowBatchQR(false) }]}
+        accountItems={accountItems}
+        className="dashboard-shell qr-workspace-shell"
+      >
+        <QRCodeBatchPrint empresaSlug={empresaNome} onClose={() => setShowBatchQR(false)} />
+      </AuthenticatedShell>
+    );
   }
 
   return (
+    <AuthenticatedShell
+      title={nomeEmpresa || 'InfraMap'}
+      context="Empresa"
+      items={shellItems}
+      accountItems={accountItems}
+      className="dashboard-shell"
+    >
     <div className="companyScreenWrapper">
       <div className="companyScreen">
-        <header>
-          <div className="headerLeft desktop-nav">
-            <button className="btnNav btn-map-view" onClick={() => setShowMap('view')}>👁 Ver Mapa</button>
-            {!isViewer && (
-              <button className="btnNav btn-map-edit" onClick={() => setShowMap('edit')}>✏ Editar Mapa</button>
-            )}
-          </div>
-          <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
-          <div className="headerRight">
-            <div className="desktop-nav">
-              {!isViewer && (
-                <button className="btnNav btn-batch-qr" onClick={() => setShowBatchQR(true)}>📷 QR Codes</button>
-              )}
-              <button className="btnNav" onClick={() => { if (onSwitchCompany) onSwitchCompany(); }}>{isDemo ? 'Sair da demonstração' : 'Trocar empresa'}</button>
-              {!isDemo && <button className="btnLogoff" onClick={logout}>Sair</button>}
-            </div>
-            <div className="mobile-menu">
-              <button
-                className="mobile-menu-btn"
-                onClick={() => setMenuOpen(o => !o)}
-                aria-label="Menu"
-              >
-                ☰
-              </button>
-              {menuOpen && (
-                <div className="mobile-menu-panel">
-                  <button
-                    className="btnNav btn-map-view"
-                    onClick={() => { setMenuOpen(false); setShowMap('view'); }}
-                  >
-                    👁 Ver Mapa
-                  </button>
-                  {!isViewer && (
-                    <button
-                      className="btnNav btn-map-edit"
-                      onClick={() => { setMenuOpen(false); setShowMap('edit'); }}
-                    >
-                      ✏ Editar Mapa
-                    </button>
-                  )}
-                  {!isViewer && (
-                    <button
-                      className="btnNav btn-batch-qr"
-                      onClick={() => { setMenuOpen(false); setShowBatchQR(true); }}
-                    >
-                      📷 QR Codes
-                    </button>
-                  )}
-                  <button
-                    className="btnNav"
-                    onClick={() => { setMenuOpen(false); if (onSwitchCompany) onSwitchCompany(); }}
-                  >
-                    {isDemo ? 'Sair da demonstração' : 'Trocar empresa'}
-                  </button>
-                  {!isDemo && (
-                    <button
-                      className="btnLogoff"
-                      onClick={() => { setMenuOpen(false); logout(); }}
-                    >
-                      Sair
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
         <div className="dashboardContainer">
           <div className="dashboardHeader">
             <h1>{nomeEmpresa}</h1>
@@ -296,6 +279,7 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
                     key={andar.id}
                     className={`company-card${isViewer ? ' company-card-passive company-card-expandable' : ''}`}
                     onClick={isViewer ? () => setAndarExpandido(andarExpandido === andar.id ? null : andar.id) : () => handleSelectAndar(andar)}
+                    aria-busy={!isViewer && selecionandoAndarId === andar.id}
                   >
                     {isViewer && (
                       <span className="rackToggle">{andarExpandido === andar.id ? '▼' : '▶'}</span>
@@ -376,5 +360,6 @@ export default function CompanyDashboard({ onAndarSelected, onSwitchCompany, isV
         </div>
       </div>
     </div>
+    </AuthenticatedShell>
   );
 }

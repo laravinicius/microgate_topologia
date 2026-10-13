@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { api } from '../api';
+import AuthenticatedShell from './AuthenticatedShell';
 
 export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
   const { logout, selectCompany, isAdmin } = useAuth();
@@ -9,7 +10,6 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
   const [empresas, setEmpresas] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const loadEmpresas = useCallback(async () => {
     try {
@@ -79,51 +79,15 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
   };
 
   return (
+    <AuthenticatedShell
+      title="Empresas"
+      context="Seleção de empresa"
+      items={isAdmin ? [{ label: 'Administração', onClick: onOpenAdmin }] : []}
+      accountItems={[{ label: 'Sair', onClick: logout, danger: true }]}
+      className="company-selection-shell"
+    >
     <div className="companyScreenWrapper">
       <div className="companyScreen">
-        <header>
-          <div className="headerLeft"></div>
-          <img src="/img/microgate2.png" alt="Logo" className="headerLogo" />
-          <div className="headerRight">
-            <div className="desktop-nav">
-              {isAdmin && (
-                <button
-                  className="btnLogoff"
-                  onClick={onOpenAdmin}
-                  style={{ background: 'var(--green)' }}
-                >
-                  Administração
-                </button>
-              )}
-              <button className="btnLogoff" onClick={logout}>Sair</button>
-            </div>
-            <div className="mobile-menu">
-              <button
-                className="mobile-menu-btn"
-                onClick={() => setMenuOpen(o => !o)}
-                aria-label="Menu"
-              >
-                ☰
-              </button>
-              {menuOpen && (
-                <div className="mobile-menu-panel">
-                  {isAdmin && (
-                    <button
-                      className="btnLogoff"
-                      onClick={() => { setMenuOpen(false); onOpenAdmin(); }}
-                      style={{ background: 'var(--green)' }}
-                    >
-                      Administração
-                    </button>
-                  )}
-                  <button className="btnLogoff" onClick={() => { setMenuOpen(false); logout(); }}>
-                    Sair
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
         <div className="companyContainer">
           <div className="companyHeader">
             <h1>InfraMap</h1>
@@ -189,5 +153,6 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
         </div>
       </div>
     </div>
+    </AuthenticatedShell>
   );
 }

@@ -24,7 +24,7 @@ export default function LoginScreen({ onDemo }) {
   return (
     <div className="loginScreen">
       <div className="loginBox">
-        <img src="/img/microgate2.png" alt="Logo" className="loginLogo" />
+        <img src="/img/logo_horizontal_white.webp" alt="Logo" className="loginLogo" />
         <h2>InfraMap</h2>
         <p>Digite seu usuário e senha para acessar</p>
         <form onSubmit={handleSubmit}>
