@@ -34,13 +34,17 @@ async function generateOneQR(url) {
   return finalCanvas.toDataURL('image/png');
 }
 
-export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
+export default function QRCodeBatchPrint({ empresaSlug, onClose, embedded = false }) {
   const [mesas, setMesas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [qrImages, setQrImages] = useState({});
   const [error, setError] = useState(null);
+  const Container = embedded ? 'section' : SystemModal;
+  const containerProps = embedded
+    ? { className: 'qrcode-panel qrcode-panel-wide qrcode-inline', 'aria-label': 'QR Codes em massa' }
+    : { title: 'QR Codes em massa', onClose, dismissOnBackdrop: true, overlayClass: 'qrcode-overlay', panelClass: 'qrcode-panel qrcode-panel-wide', print: true };
 
   useEffect(() => {
     loadData();
@@ -92,7 +96,7 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
 
   if (mesas.length === 0 && !loading && !error) {
     return (
-      <SystemModal title="QR Codes em massa" onClose={onClose} dismissOnBackdrop overlayClass="qrcode-overlay" panelClass="qrcode-panel qrcode-panel-wide" print>
+      <Container {...containerProps}>
           <div className="qrcode-header">
             <h3>QR Codes em Massa</h3>
             <button className="qrcode-close" aria-label="Fechar QR Codes" onClick={onClose}>✕</button>
@@ -100,12 +104,12 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
           <div className="qrcode-body">
             <div className="qrcode-empty">Nenhuma mesa cadastrada</div>
           </div>
-      </SystemModal>
+      </Container>
     );
   }
 
   return (
-    <SystemModal title="QR Codes em massa" onClose={onClose} dismissOnBackdrop overlayClass="qrcode-overlay" panelClass="qrcode-panel qrcode-panel-wide" print>
+    <Container {...containerProps}>
         <div className="qrcode-header">
           <h3>QR Codes em Massa — {mesas.length} mesas</h3>
           <div className="qrcode-header-actions">
@@ -147,6 +151,6 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
             </div>
           ))}
         </div>
-    </SystemModal>
+    </Container>
   );
 }

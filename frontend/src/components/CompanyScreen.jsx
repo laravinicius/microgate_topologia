@@ -5,8 +5,8 @@ import { api, requireSuccess } from '../api';
 import { usePrompt } from './PromptModal';
 import AuthenticatedShell from './AuthenticatedShell';
 
-export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
-  const { logout, selectCompany, isAdmin } = useAuth();
+export default function CompanyScreen({ onCompanySelected, navigation }) {
+  const { selectCompany, isAdmin } = useAuth();
   const { success, error } = useNotification();
   const [empresas, setEmpresas] = useState([]);
   const prompt = usePrompt();
@@ -28,7 +28,6 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
     try {
       const data = await selectCompany(empresa.id);
       if (data.success) {
-        success(`Empresa "${empresa.nome}" selecionada`);
         if (onCompanySelected) onCompanySelected();
       }
     } catch (err) {
@@ -65,8 +64,7 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
     <AuthenticatedShell
       title="Empresas"
       context="Seleção de empresa"
-      items={isAdmin ? [{ label: 'Administração', onClick: onOpenAdmin }] : []}
-      accountItems={[{ label: 'Sair', onClick: logout, danger: true }]}
+      {...navigation}
       className="company-selection-shell"
     >
     <div className="companyScreenWrapper">

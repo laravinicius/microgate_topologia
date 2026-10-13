@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { usePrompt } from './PromptModal';
 import { api, requireSuccess } from '../api';
 import AuthenticatedShell from './AuthenticatedShell';
 
-export default function Administracao({ onVoltar }) {
-  const { logout } = useAuth();
+export default function Administracao({ navigation }) {
   const { success, error } = useNotification();
   const prompt = usePrompt();
   const [users, setUsers] = useState([]);
@@ -57,7 +55,7 @@ export default function Administracao({ onVoltar }) {
     requireSuccess(await api.put(`/api/users/${user.id}`, { password: values.password }));
     success('Senha redefinida');
   } });
-  return <AuthenticatedShell title="Administração" context="Usuários e permissões" items={[{ label: 'Empresas', onClick: onVoltar }]} accountItems={[{ label: 'Sair', onClick: logout, danger: true }]} className="administration-shell">
+  return <AuthenticatedShell title="Administração" context="Usuários e permissões" {...navigation} className="administration-shell">
     <div className="companyScreenWrapper"><div className="companyScreen"><div className="companyContainer">
       <div className="companyHeader"><h1>Administração</h1><p>Gerenciamento de usuários e permissões</p></div>
       <div className="secaoUsuarios"><div className="usuariosContainer">

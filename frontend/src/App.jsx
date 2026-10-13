@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { NotificationProvider } from './components/Notification';
+import { NotificationProvider, useNotification } from './components/Notification';
 import { PromptProvider, usePrompt } from './components/PromptModal';
 import LoginScreen from './components/LoginScreen';
 import CompanyScreen from './components/CompanyScreen';
 import CompanyDashboard from './components/CompanyDashboard';
 import Administracao from './components/Administracao';
 import AuthenticatedShell from './components/AuthenticatedShell';
+import MapEditor from './components/MapEditor';
+import QRCodeBatchPrint from './components/QRCodeBatchPrint';
 
 import VinculoPanel from './components/VinculoPanel';
 import PublicMapViewer from './components/PublicMapViewer';
@@ -15,11 +17,32 @@ import { api, getToken, requireSuccess } from './api';
 import { DEMO_DATA } from './data/demoData';
 
 function AppContent() {
-  const { user, isAdmin, loading, empresaId, empresaNome, andarId, andarNome, clearAndar, clearEmpresa, logout } = useAuth();
+  const { user, isAdmin, loading, empresaId, empresaNome, andarId, andarNome, selectAndar, logout } = useAuth();
   const prompt = usePrompt();
+  const { error: showError } = useNotification();
 
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [activeScreen, setActiveScreen] = useState('empresas');
   const [demoMode, setDemoMode] = useState(false);
+  const [navigationBusy, setNavigationBusy] = useState(false);
+  const [mapAndarId, setMapAndarId] = useState(null);
+  const [panelExpanded, setPanelExpanded] = useState(true);
+  const [viewerAndarId, setViewerAndarId] = useState(null);
+  const [floorNavigation, setFloorNavigation] = useState({ context: null, andares: [] });
+  const floorRequestRef = useRef(0);
+  const mapEditorRef = useRef(null);
+  const navigationInProgress = useRef(false);
+  const isDemo = !user && demoMode;
+  const canManage = isAdmin && !isDemo;
+  const hasCompany = isDemo || Boolean(empresaId);
+  const floorNavigationContext = isDemo ? 'demo' : user && empresaId ? empresaId : null;
+  const navigationAndares = floorNavigation.context === floorNavigationContext ? floorNavigation.andares : [];
+  const currentScreen = isDemo
+    ? (activeScreen === 'map' ? 'map' : 'dashboard')
+    : activeScreen === 'admin' && isAdmin ? 'admin'
+    : !empresaId || activeScreen === 'empresas' ? 'empresas'
+    : (activeScreen === 'mesas' && !andarId) || (['edit', 'qr', 'mesas', 'admin'].includes(activeScreen) && !isAdmin)
+      ? 'dashboard' : activeScreen;
+
   const [data, setData] = useState({ mesas: [], racks: [] });
   const [dataStatus, setDataStatus] = useState('idle');
   const [dataContext, setDataContext] = useState(null);
@@ -29,6 +52,39 @@ function AppContent() {
   const [vinculo, setVinculo] = useState(null);
   const [qrcodeMesa, setQrcodeMesa] = useState(null);
   const dataRequestRef = useRef(0);
+
+  useEffect(() => {
+    setActiveScreen('empresas');
+    setMapAndarId(null);
+    setVinculo(null);
+    setQrcodeMesa(null);
+    setViewerAndarId(null);
+  }, [user]);
+
+  const loadNavigationAndares = useCallback(async () => {
+    const requestId = ++floorRequestRef.current;
+    if (floorNavigationContext === 'demo') {
+      setFloorNavigation({ context: floorNavigationContext, andares: DEMO_DATA.andares });
+      return;
+    }
+    if (!floorNavigationContext) {
+      setFloorNavigation({ context: null, andares: [] });
+      return;
+    }
+    try {
+      const response = requireSuccess(await api.get('/api/andares'));
+      if (requestId === floorRequestRef.current) {
+        setFloorNavigation({ context: floorNavigationContext, andares: response.andares });
+      }
+    } catch {
+      if (requestId === floorRequestRef.current) showError('Erro ao carregar andares');
+    }
+  }, [floorNavigationContext, showError]);
+
+  useEffect(() => {
+    loadNavigationAndares();
+    return () => { floorRequestRef.current++; };
+  }, [loadNavigationAndares]);
 
   const carregarDadosServidor = useCallback(async () => {
     const requestId = ++dataRequestRef.current;
@@ -186,38 +242,124 @@ function AppContent() {
     if (confirmado) setVinculo(null);
   }, [vinculo, prompt, carregarDadosServidor]);
 
-  const handleSwitchCompany = useCallback(() => {
-    clearEmpresa();
-  }, [clearEmpresa]);
+  const navigate = async (screen, action) => {
+    if (navigationInProgress.current) return false;
+    if (!action && screen === currentScreen) return true;
+    navigationInProgress.current = true;
+    setNavigationBusy(true);
+    try {
+      if (currentScreen === 'edit') await mapEditorRef.current?.flushPendingChanges();
+      if (action) await action();
+      else setActiveScreen(screen);
+      setVinculo(null);
+      setQrcodeMesa(null);
+      return true;
+    } catch (err) {
+      showError(err.message || 'Não foi possível salvar o mapa. Tente novamente antes de sair.');
+      return false;
+    } finally {
+      navigationInProgress.current = false;
+      setNavigationBusy(false);
+    }
+  };
+  const navItem = (screen, label, needsCompany = false) => ({
+    label,
+    active: currentScreen === screen,
+    disabled: needsCompany && !hasCompany,
+    description: needsCompany && !hasCompany ? 'Selecione uma empresa' : undefined,
+    onClick: () => navigate(screen)
+  });
+  const navigateToAndar = andar => navigate(canManage ? 'mesas' : 'dashboard', async () => {
+    if (canManage) {
+      requireSuccess(await selectAndar(andar.id));
+      setMapAndarId(andar.id);
+      setActiveScreen('mesas');
+    } else {
+      setViewerAndarId(andar.id);
+      setActiveScreen('dashboard');
+    }
+    setPanelExpanded(true);
+  });
+  const navigation = {
+    busy: navigationBusy,
+    items: [
+      ...(!isDemo ? [navItem('empresas', 'Empresas')] : []),
+      {
+        ...navItem('dashboard', 'Painel da empresa', true),
+        id: 'company-panel',
+        active: currentScreen === 'dashboard' && !viewerAndarId,
+        expanded: panelExpanded,
+        onToggle: () => setPanelExpanded(expanded => !expanded),
+        onClick: () => navigate('dashboard', () => {
+          setViewerAndarId(null);
+          setActiveScreen('dashboard');
+        }),
+        children: navigationAndares.map(andar => ({
+          id: `andar-${andar.id}`,
+          label: andar.nome,
+          active: canManage ? currentScreen === 'mesas' && andarId === andar.id
+            : currentScreen === 'dashboard' && viewerAndarId === andar.id,
+          onClick: () => navigateToAndar(andar)
+        }))
+      },
+      navItem('map', 'Ver mapa', true),
+      ...(canManage ? [
+        navItem('edit', 'Editar mapa', true),
+        navItem('qr', 'QR Codes', true)
+      ] : [])
+    ],
+    accountItems: [
+      ...(canManage ? [navItem('admin', 'Administração')] : []),
+      {
+        label: isDemo ? 'Sair da demonstração' : 'Sair',
+        danger: true,
+        onClick: () => navigate(null, isDemo ? () => {
+          setDemoMode(false);
+          setActiveScreen('empresas');
+          setMapAndarId(null);
+          setViewerAndarId(null);
+        } : logout)
+      }
+    ]
+  };
 
   if (loading) return null;
-  if (!user && demoMode) {
-    return <CompanyDashboard isViewer demoData={DEMO_DATA} onSwitchCompany={() => setDemoMode(false)} />;
+  if (!user && !isDemo) return <LoginScreen onDemo={() => { setActiveScreen('dashboard'); setDemoMode(true); }} />;
+  if (currentScreen === 'admin') return <Administracao navigation={navigation} />;
+  if (currentScreen === 'empresas') {
+    return <CompanyScreen navigation={navigation} onCompanySelected={() => {
+      setMapAndarId(null);
+      setViewerAndarId(null);
+      setPanelExpanded(true);
+      setActiveScreen('dashboard');
+    }} />;
   }
-  if (!user) return <LoginScreen onDemo={() => setDemoMode(true)} />;
-  if (showAdmin && isAdmin) return <Administracao onVoltar={() => setShowAdmin(false)} />;
-  if (!empresaId) {
-    return <CompanyScreen onOpenAdmin={() => setShowAdmin(true)} />;
+  if (currentScreen === 'dashboard') {
+    return <CompanyDashboard navigation={navigation} isViewer={!canManage} demoData={isDemo ? DEMO_DATA : null}
+      andares={navigationAndares} reloadAndares={loadNavigationAndares}
+      selectedAndarId={viewerAndarId} onViewerAndarSelected={setViewerAndarId}
+      onAndarSelected={id => { setMapAndarId(id); setPanelExpanded(true); setActiveScreen('mesas'); }} />;
   }
-  if (!isAdmin) {
-    return <CompanyDashboard isViewer onSwitchCompany={handleSwitchCompany} />;
+  if (currentScreen === 'map' || currentScreen === 'edit') {
+    return <AuthenticatedShell title={isDemo ? DEMO_DATA.empresaNome : empresaNome}
+      context={currentScreen === 'map' ? 'Visualização do mapa' : 'Edição do mapa'} {...navigation}
+      className="dashboard-shell map-workspace-shell">
+      <MapEditor ref={mapEditorRef} onVoltar={() => navigate('dashboard')} readOnly={currentScreen === 'map'}
+        demoData={isDemo ? DEMO_DATA : null} initialAndarId={mapAndarId ?? andarId} onAndarChange={setMapAndarId} />
+    </AuthenticatedShell>;
   }
-  if (!andarId) {
-    return <CompanyDashboard onSwitchCompany={handleSwitchCompany} onOpenAdmin={() => setShowAdmin(true)} />;
+  if (currentScreen === 'qr') {
+    return <AuthenticatedShell title={empresaNome || 'QR Codes'} context="Impressão de QR Codes"
+      {...navigation} className="dashboard-shell qr-workspace-shell">
+      <QRCodeBatchPrint empresaSlug={empresaNome} onClose={() => navigate('dashboard')} embedded />
+    </AuthenticatedShell>;
   }
 
   return (
     <AuthenticatedShell
       title={andarNome || 'Mapa'}
       context={empresaNome || 'Empresa'}
-      items={[
-        { label: 'Andares', onClick: clearAndar },
-        { label: 'Trocar empresa', onClick: handleSwitchCompany }
-      ]}
-      accountItems={[
-        { label: 'Administração', onClick: () => setShowAdmin(true) },
-        { label: 'Sair', onClick: logout, danger: true }
-      ]}
+      {...navigation}
       className="map-canvas-shell"
     >
     <div id="appContainer">

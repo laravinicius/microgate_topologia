@@ -3,51 +3,24 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { usePrompt } from './PromptModal';
 import RackListView from './RackListView';
-import MapEditor from './MapEditor';
-import QRCodeBatchPrint from './QRCodeBatchPrint';
 import { api, requireSuccess } from '../api';
 import AuthenticatedShell from './AuthenticatedShell';
 
-export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewer = false, demoData = null }) {
-  const { empresaNome, andarNome, selectAndar, logout } = useAuth();
+export default function CompanyDashboard({ navigation, onAndarSelected, isViewer = false, demoData = null,
+  andares = [], reloadAndares, selectedAndarId = null, onViewerAndarSelected }) {
+  const { empresaNome, selectAndar } = useAuth();
   const { success, error } = useNotification();
   const prompt = usePrompt();
 
-  const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
-  const [showBatchQR, setShowBatchQR] = useState(false);
-  const [andares, setAndares] = useState([]);
   const [racks, setRacks] = useState([]);
   const [mesas, setMesas] = useState([]);
-  const [andarExpandido, setAndarExpandido] = useState(null);
+  const andarExpandido = selectedAndarId;
   const [selecionandoAndarId, setSelecionandoAndarId] = useState(null);
   const selecaoAndarEmAndamento = useRef(false);
-  const isDemo = Boolean(demoData);
+  const selectedFloorRef = useRef(null);
   const nomeEmpresa = demoData?.empresaNome || empresaNome;
-  const shellItems = [
-    { label: 'Ver mapa', onClick: () => setShowMap('view') },
-    ...(!isViewer ? [
-      { label: 'Editar mapa', onClick: () => setShowMap('edit') },
-      { label: 'QR Codes', onClick: () => setShowBatchQR(true) }
-    ] : []),
-    { label: isDemo ? 'Sair da demonstração' : 'Trocar empresa', onClick: onSwitchCompany }
-  ];
-  const accountItems = [
-    ...(!isDemo && onOpenAdmin ? [{ label: 'Administração', onClick: onOpenAdmin }] : []),
-    ...(!isDemo ? [{ label: 'Sair', onClick: logout, danger: true }] : [])
-  ];
 
-  const loadAndares = useCallback(async () => {
-    if (demoData) {
-      setAndares(demoData.andares);
-      return;
-    }
-    try {
-      const data = await api.get('/api/andares');
-      if (data.success) setAndares(data.andares);
-    } catch {
-      error('Erro ao carregar andares');
-    }
-  }, [demoData, error]);
+  const loadAndares = reloadAndares;
 
   const loadRacks = useCallback(async () => {
     if (demoData) {
@@ -67,9 +40,12 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
   }, [demoData, error]);
 
   useEffect(() => {
-    loadAndares();
     loadRacks();
-  }, [loadAndares, loadRacks]);
+  }, [loadRacks]);
+
+  useEffect(() => {
+    if (isViewer && selectedAndarId !== null) selectedFloorRef.current?.scrollIntoView({ block: 'start' });
+  }, [isViewer, selectedAndarId, andares]);
 
   const handleSelectAndar = async (andar) => {
     if (selecaoAndarEmAndamento.current) return;
@@ -78,7 +54,7 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
     try {
       const data = await selectAndar(andar.id);
       if (data.success) {
-        success(`Andar "${andar.nome}" selecionado`);
+        onAndarSelected?.(andar.id);
       } else {
         error(data.message || 'Não foi possível selecionar este andar.');
       }
@@ -192,43 +168,11 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
     return `${rack.nome} | ${pp.nome} | Porta ${p.porta}`;
   };
 
-  if (showMap) {
-    return (
-      <AuthenticatedShell
-        title={nomeEmpresa || 'Mapa'}
-        context={showMap === 'view' ? 'Visualização do mapa' : 'Edição do mapa'}
-        items={[
-          { label: 'Voltar ao painel', onClick: () => setShowMap(null) },
-          ...(!isDemo ? [{ label: 'Trocar empresa', onClick: onSwitchCompany }] : [])
-        ]}
-        accountItems={accountItems}
-        className="dashboard-shell map-workspace-shell"
-      >
-        <MapEditor onVoltar={() => setShowMap(null)} readOnly={showMap === 'view'} demoData={demoData} />
-      </AuthenticatedShell>
-    );
-  }
-
-  if (showBatchQR) {
-    return (
-      <AuthenticatedShell
-        title={nomeEmpresa || 'QR Codes'}
-        context="Impressão de QR Codes"
-        items={[{ label: 'Voltar ao painel', onClick: () => setShowBatchQR(false) }]}
-        accountItems={accountItems}
-        className="dashboard-shell qr-workspace-shell"
-      >
-        <QRCodeBatchPrint empresaSlug={empresaNome} onClose={() => setShowBatchQR(false)} />
-      </AuthenticatedShell>
-    );
-  }
-
   return (
     <AuthenticatedShell
       title={nomeEmpresa || 'InfraMap'}
       context="Empresa"
-      items={shellItems}
-      accountItems={accountItems}
+      {...navigation}
       className="dashboard-shell"
     >
     <div className="companyScreenWrapper">
@@ -248,8 +192,9 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
                 {andares.map(andar => (
                   <div
                     key={andar.id}
+                    ref={isViewer && andarExpandido === andar.id ? selectedFloorRef : undefined}
                     className={`company-card${isViewer ? ' company-card-passive company-card-expandable' : ''}`}
-                    onClick={isViewer ? () => setAndarExpandido(andarExpandido === andar.id ? null : andar.id) : () => handleSelectAndar(andar)}
+                    onClick={isViewer ? () => onViewerAndarSelected?.(andarExpandido === andar.id ? null : andar.id) : () => handleSelectAndar(andar)}
                     aria-busy={!isViewer && selecionandoAndarId === andar.id}
                   >
                     {isViewer && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
 import { api, requireSuccess } from '../api';
@@ -21,12 +21,13 @@ function snap(val) {
   return Math.round(val / GRID) * GRID;
 }
 
-export default function MapEditor({ onVoltar, readOnly = false, demoData = null }) {
+const MapEditor = forwardRef(function MapEditor({ onVoltar, readOnly = false, demoData = null, initialAndarId = null, onAndarChange }, ref) {
   const { empresaId, empresaNome } = useAuth();
   const { success, error: showError } = useNotification();
   const prompt = usePrompt();
   const writeQueue = useRef(Promise.resolve());
   const activeAndarRef = useRef(null);
+  const initialAndarRef = useRef(initialAndarId);
 
   const [andares, setAndares] = useState([]);
   const [activeAndarId, setActiveAndarId] = useState(null);
@@ -71,14 +72,16 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
   const loadAndares = useCallback(async () => {
     if (demoData) {
       setAndares(demoData.andares);
-      setActiveAndarId(current => current ?? demoData.andares[0]?.id ?? null);
+      setActiveAndarId(current => current ?? (demoData.andares.some(a => a.id === initialAndarRef.current)
+        ? initialAndarRef.current : demoData.andares[0]?.id ?? null));
       return;
     }
     try {
       const data = await api.get('/api/andares');
       if (data.success) {
         setAndares(data.andares);
-        setActiveAndarId(data.andares.length > 0 ? data.andares[0].id : null);
+        setActiveAndarId(data.andares.some(a => a.id === initialAndarRef.current)
+          ? initialAndarRef.current : data.andares[0]?.id ?? null);
       }
     } catch {
       showError('Erro ao carregar andares');
@@ -127,6 +130,10 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
   useEffect(() => {
     loadAndares();
   }, [loadAndares]);
+
+  useEffect(() => {
+    if (activeAndarId !== null) onAndarChange?.(activeAndarId);
+  }, [activeAndarId, onAndarChange]);
 
   useEffect(() => {
     hasAutoZoomed.current = false;
@@ -250,6 +257,14 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
   }, [activeAndarId]);
 
   const saveElements = useCallback(() => persistElements().catch(err => showError(err.message || 'Erro ao salvar')), [persistElements, showError]);
+  // A navegação só desmonta o editor depois de concluir a fila e o último gesto.
+  const flushPendingChanges = useCallback(async () => {
+    clearTimeout(saveTimerRef.current);
+    if (saveStatusRef.current === 'saving') await writeQueue.current;
+    else await writeQueue.current.catch(() => {});
+    if (saveStatusRef.current === 'unsaved') await persistElements();
+  }, [persistElements]);
+  useImperativeHandle(ref, () => ({ flushPendingChanges }), [flushPendingChanges]);
   const scheduleSave = useCallback(() => {
     saveStatusRef.current = 'unsaved';
     setSaveStatus('unsaved');
@@ -482,7 +497,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
       setSelectionBox(null);
       selectionBoxRef.current = null;
       hasDragged.current = false;
-    } else if (e.target.classList?.contains('map-canvas')) {
+    } else if (e.target === canvasRef.current || e.target.classList?.contains('map-canvas')) {
       setSelectedIds([]);
     }
   }, []);
@@ -594,7 +609,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     }
-  }, [zoom, pan, selectedIds, elements, scheduleSave]);
+  }, [readOnly, zoom, pan, selectedIds, elements, scheduleSave, updateElement]);
 
   // Atalhos não atravessam popups, inclusive consultas e confirmações.
   useEffect(() => {
@@ -695,7 +710,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
 
       <div className="map-editor-body">
         {/* Canvas */}
-        <div className="map-canvas-wrapper" ref={canvasRef} onWheel={handleWheel}>
+        <div className="map-canvas-wrapper" ref={canvasRef} onWheel={handleWheel} onMouseDown={handleCanvasMouseDown}>
           <div
             className="map-canvas"
             style={{
@@ -703,7 +718,6 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
               height: canvasSize.height,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             }}
-            onMouseDown={handleCanvasMouseDown}
           >
             {/* Grid is rendered via CSS background */}
 
@@ -953,4 +967,6 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
       )}
     </div>
   );
-}
+});
+
+export default MapEditor;
