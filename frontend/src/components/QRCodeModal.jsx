@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
+import SystemModal from './SystemModal';
 
 export default function QRCodeModal({ mesa, empresaSlug, andarId, onClose }) {
   const [loading, setLoading] = useState(true);
@@ -55,11 +56,10 @@ export default function QRCodeModal({ mesa, empresaSlug, andarId, onClose }) {
   }, [mesa.nome, imageUrl]);
 
   return (
-    <div className="qrcode-overlay" onClick={onClose}>
-      <div className="qrcode-panel" onClick={e => e.stopPropagation()}>
+    <SystemModal title={`QR Code — ${mesa.nome}`} onClose={onClose} dismissOnBackdrop overlayClass="qrcode-overlay" panelClass="qrcode-panel">
         <div className="qrcode-header">
           <h3>QR Code — {mesa.nome}</h3>
-          <button className="qrcode-close" onClick={onClose}>✕</button>
+          <button className="qrcode-close" aria-label="Fechar QR Code" onClick={onClose}>✕</button>
         </div>
         <div className="qrcode-body">
           {loading ? (
@@ -78,7 +78,6 @@ export default function QRCodeModal({ mesa, empresaSlug, andarId, onClose }) {
             Fechar
           </button>
         </div>
-      </div>
-    </div>
+    </SystemModal>
   );
 }

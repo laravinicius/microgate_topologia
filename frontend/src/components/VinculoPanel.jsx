@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef } from 'react';
+import SystemModal from './SystemModal';
 
 function getRackNome(racks, rackId) {
   const rack = racks.find(r => r.id === rackId);
@@ -24,9 +25,19 @@ function buildBreadcrumb(racks, vinculo) {
   return parts.join(' → ');
 }
 
-export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular }) {
-  if (!vinculo) return null;
-
+export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, onSelectRack, onSelectPatch, onSelectPorta, onVoltar, onCancelar, onDesvincular, onSalvar }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const sending = useRef(false);
+  const perform = async action => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError('');
+    try { await action(); }
+    catch (err) { setError(err.message || 'Erro ao salvar vínculo.'); }
+    finally { sending.current = false; setBusy(false); }
+  };
   const { etapa, rackId, patchId, pontoId, mesaId, mesaNome } = vinculo;
   const ponto = vinculo.ponto;
   const breadcrumb = buildBreadcrumb(racks, vinculo);
@@ -37,7 +48,7 @@ export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, on
   const ocupadas = useMemo(() => {
     if (!rackId || !patchId) return new Set();
     const set = new Set();
-    const todasMesas = mesasAtuais || allMesas || [];
+    const todasMesas = allMesas?.length ? allMesas : mesasAtuais || [];
     for (const m of todasMesas) {
       for (const p of m.pontos || []) {
         if (p.id === pontoId && m.id === mesaId) continue;
@@ -56,8 +67,8 @@ export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, on
   }, [patchPanel, ocupadas]);
 
   return (
-    <div className="vinculoOverlay" onClick={(e) => { if (e.target === e.currentTarget) onCancelar(); }}>
-      <div className="vinculoPainel">
+    <SystemModal title={`Vínculo de ${mesaNome} / P${pontoId}`} onClose={onCancelar} busy={busy} overlayClass="vinculoOverlay" panelClass="vinculoPainel">
+      <fieldset className="system-modal-fields" disabled={busy}>
         <div className="vinculoCabecalho">
           <div className="vinculoBreadcrumb">{breadcrumb}</div>
           {etapa === 'rack' && <div className="vinculoTitulo">Selecione um rack</div>}
@@ -103,7 +114,7 @@ export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, on
                   {Array.from({ length: patchPanel.portas }, (_, i) => i + 1).map(porta => {
                     const livre = portasLivres.includes(porta);
                     return livre
-                      ? <button key={porta} className="vinculoOpcao" onClick={() => onSelectPorta(porta)}>{porta}</button>
+                      ? <button key={porta} aria-pressed={vinculo.porta === porta} className="vinculoOpcao" onClick={() => onSelectPorta(porta)}>{porta}</button>
                       : <div key={porta} className="vinculoOpcao vinculoOpcao--disabled">{porta}</div>;
                   })}
                 </div>
@@ -112,14 +123,16 @@ export default function VinculoPanel({ vinculo, racks, allMesas, mesasAtuais, on
 
         <div className="vinculoAcoes">
           {ponto && ponto.rackId && ponto.patchId && ponto.porta && (
-            <button className="vinculoDesvincular" onClick={onDesvincular}>Limpar</button>
+            <button className="vinculoDesvincular" onClick={() => perform(onDesvincular)}>Limpar</button>
           )}
           {etapa !== 'rack' && (
             <button className="vinculoVoltar" onClick={onVoltar}>Voltar</button>
           )}
-          <button className="vinculoCancelar" onClick={onCancelar}>Cancelar</button>
+          <button data-modal-cancel className="vinculoCancelar" onClick={onCancelar}>Cancelar</button>
+          {etapa === 'porta' && <button className="promptConfirmar" disabled={!vinculo.porta || busy} onClick={() => perform(onSalvar)}>{busy ? 'Aguarde…' : 'Salvar'}</button>}
         </div>
-      </div>
-    </div>
+      </fieldset>
+      {error && <p className="system-modal-error" role="alert">{error}</p>}
+    </SystemModal>
   );
 }

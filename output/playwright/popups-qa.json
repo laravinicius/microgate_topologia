@@ -1,0 +1,338 @@
+{
+  "environment": "Chrome headless, Vite 127.0.0.1:5189, API totalmente simulada e dados descartáveis em memória; nenhum acesso ao banco",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "checks": [
+    "Clique no fundo não fecha formulário",
+    "Cancelar não escreve",
+    "Foco retorna à origem",
+    "Validação interna",
+    "Falha preserva rascunho",
+    "Fechamento bloqueado durante gravação",
+    "Envio duplicado bloqueado",
+    "Valores atuais na edição",
+    "Foco seguro em exclusão",
+    "Exclusão de empresa",
+    "Cadastro de usuário e empresas",
+    "Perfil provisório não escreve",
+    "Perfil e empresas gravam juntos",
+    "Senha protegida",
+    "Desativação confirmada",
+    "Proteção de próprio usuário respeitada",
+    "Cadastro de andar",
+    "Edição e exclusão de andar",
+    "Rack e patch panel criados",
+    "Exclusão de patch panel",
+    "Exclusão de rack",
+    "Destaque fica no rascunho",
+    "Cancelar destaque preserva porta",
+    "Destaque só muda ao salvar",
+    "Painel do mapa não contém campos editáveis",
+    "Delete não atravessa popup",
+    "Propriedades não alteram o mapa antes de salvar",
+    "Falha não aplica propriedades",
+    "Propriedades gravadas conjuntamente",
+    "Tamanho da fonte coletivo",
+    "Cancelar exclusão coletiva",
+    "Criação de objeto em popup",
+    "Atalho exclui somente representação",
+    "Mesa visual por popup",
+    "Repetir salvamento não duplica rack criado",
+    "Arrastar objeto funciona",
+    "Redimensionar funciona",
+    "Tab permanece no popup",
+    "Popup cabe em celular",
+    "Salvar visível com formulário longo",
+    "Mesa com quantidade de pontos",
+    "Mesa renomeada",
+    "Selecionar porta não grava",
+    "Cancelar vínculo descarta seleção",
+    "Falha mantém seleção da porta",
+    "Vínculo só persiste em Salvar",
+    "Cancelar confirmação mantém vínculo e popup",
+    "Limpar vínculo exige confirmação",
+    "Confirmação aninhada libera fundo",
+    "QR Code usa modal compartilhado",
+    "Mesa excluída por confirmação",
+    "Impressão usa página atual",
+    "Impressão oculta navegação",
+    "Sair da impressão libera tela",
+    "Exclusão coletiva remove somente formas",
+    "Mesa existente mantém ID",
+    "Recarga preserva mapa na API simulada",
+    "Consulta de rack só permite leitura",
+    "Delete inativo em consulta",
+    "QR antigo abre popup público",
+    "Consulta pública não expõe edição",
+    "Consulta pública restaura interação",
+    "Visualizador não recebe ações de escrita",
+    "Visualizador abre consulta",
+    "Demonstração permanece somente leitura",
+    "Demonstração abre popup de consulta",
+    "Fila resolve todos os popups sem sobrescrever",
+    "Fila restaura fundo",
+    "Autosave e popup preservam gesto e propriedades",
+    "Cor inválida bloqueia gravação",
+    "Destaque salvo após leitura atual da conexão",
+    "Cadastro usa coleção atual de mesas",
+    "Exclusão preserva outras mesas",
+    "36 etiquetas distribuídas em duas páginas",
+    "Editar campo remove erro de validação antigo",
+    "Cancelamento validado na versão final",
+    "QA sem erros de renderer, diálogos nativos ou requisições fora da simulação",
+    "PDF A4 com 36 etiquetas: 35 na primeira página e 1 na segunda, verificado por extração do PDF"
+  ],
+  "passed": 78,
+  "rendererErrors": [],
+  "nativeDialogs": [],
+  "unhandledEndpoints": [],
+  "apiWrites": [
+    {
+      "method": "POST",
+      "path": "/api/empresas"
+    },
+    {
+      "method": "POST",
+      "path": "/api/empresas"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/empresas/101"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/empresas/101"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/102"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/102"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/102"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    },
+    {
+      "method": "POST",
+      "path": "/api/andares"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/andares/103"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/andares/103"
+    },
+    {
+      "method": "POST",
+      "path": "/api/racks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/racks/104"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/racks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/racks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/racks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/ponto/toggle-atencao"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "POST",
+      "path": "/api/racks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-andar"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mesas/1791920398998"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/map-elements/bulk"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/ponto/toggle-atencao"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-andar"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/data"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/select-company"
+    }
+  ],
+  "print": {
+    "pages": 2,
+    "labelsPerPage": [
+      35,
+      1
+    ],
+    "size": "A4",
+    "qrSize": "3cm"
+  },
+  "evidence": [
+    "popups-desktop.png",
+    "popups-mobile.png",
+    "popups-public-mobile.png",
+    "popups-qrcode-print.pdf"
+  ]
+}

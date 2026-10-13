@@ -5,7 +5,7 @@ import { usePrompt } from './PromptModal';
 import RackListView from './RackListView';
 import MapEditor from './MapEditor';
 import QRCodeBatchPrint from './QRCodeBatchPrint';
-import { api } from '../api';
+import { api, requireSuccess } from '../api';
 import AuthenticatedShell from './AuthenticatedShell';
 
 export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewer = false, demoData = null }) {
@@ -16,8 +16,6 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
   const [showMap, setShowMap] = useState(null); // null | 'view' | 'edit'
   const [showBatchQR, setShowBatchQR] = useState(false);
   const [andares, setAndares] = useState([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState('');
   const [racks, setRacks] = useState([]);
   const [mesas, setMesas] = useState([]);
   const [andarExpandido, setAndarExpandido] = useState(null);
@@ -92,125 +90,98 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
     }
   };
 
-  const handleAddAndar = async () => {
-    if (!newName.trim()) return;
-    try {
-      const data = await api.post('/api/andares', { nome: newName.trim() });
-      if (data.success) {
-        success('Andar criado');
-        setNewName('');
-        setShowAddForm(false);
-        loadAndares();
-      }
-    } catch {
-      error('Erro ao criar andar');
+  const handleAddAndar = () => prompt.text('Novo andar', 'Nome do andar / setor', '', {
+    onSubmit: async nome => {
+      requireSuccess(await api.post('/api/andares', { nome }));
+      success('Andar criado');
+      await loadAndares();
     }
-  };
+  });
 
-  const handleEditAndar = async (andar) => {
-    const nome = window.prompt('Novo nome:', andar.nome);
-    if (!nome || nome.trim() === andar.nome) return;
-    try {
-      const data = await api.put(`/api/andares/${andar.id}`, { nome: nome.trim() });
-      if (data.success) {
-        success('Andar atualizado');
-        loadAndares();
-      }
-    } catch {
-      error('Erro ao atualizar andar');
+  const handleEditAndar = andar => prompt.text('Editar andar', 'Nome do andar / setor', andar.nome, {
+    onSubmit: async nome => {
+      if (nome === andar.nome) return;
+      requireSuccess(await api.put(`/api/andares/${andar.id}`, { nome }));
+      success('Andar atualizado');
+      await loadAndares();
     }
-  };
+  });
 
-  const handleDeleteAndar = async (andar) => {
-    if (!confirm(`Excluir "${andar.nome}"? Todas as mesas deste andar serao removidas.`)) return;
-    try {
-      const data = await api.del(`/api/andares/${andar.id}`);
-      if (data.success) {
-        success('Andar excluido');
-        loadAndares();
-      }
-    } catch {
-      error('Erro ao excluir andar');
-    }
-  };
-
-  const handleCriarRack = async () => {
-    const nome = await prompt.text('Novo rack', 'Nome do rack');
-    if (!nome) return;
-    const newData = { mesas: [], racks: [...racks, { id: Date.now(), nome, patchPanels: [] }] };
-    try {
-      await api.put('/api/racks', newData);
-      success('Rack criado');
-      loadRacks();
-    } catch {
-      error('Erro ao criar rack');
-    }
-  };
-
-  const handleEditRack = async (rack) => {
-    const nome = await prompt.text('Editar rack', 'Novo nome:', rack.nome);
-    if (!nome || nome.trim() === rack.nome.trim()) return;
-    try {
-      const data = await api.put(`/api/racks/${rack.id}`, { nome: nome.trim() });
-      if (data.success) {
-        success('Rack atualizado');
-        loadRacks();
-      }
-    } catch {
-      error('Erro ao atualizar rack');
-    }
-  };
-
-  const handleApagarRack = async (rack) => {
-    const confirmado = await prompt.confirm('Apagar rack', `Deseja apagar o rack ${rack.nome} e seus patch panels?`);
-    if (!confirmado) return;
-    const newData = { mesas: [], racks: racks.filter(r => r.id !== rack.id) };
-    try {
-      await api.put('/api/racks', newData);
-      success('Rack apagado');
-      loadRacks();
-    } catch {
-      error('Erro ao apagar rack');
-    }
-  };
-
-  const handleCriarPatchPanel = async (rackId) => {
-    const nome = await prompt.text('Novo patch panel', 'Nome do patch panel');
-    if (!nome) return;
-    const newRacks = racks.map(r =>
-      r.id === rackId ? { ...r, patchPanels: [...r.patchPanels, { id: Date.now(), nome, portas: 24 }] } : r
-    );
-    try {
-      await api.put('/api/racks', { mesas: [], racks: newRacks });
-      success('Patch panel criado');
-      loadRacks();
-    } catch {
-      error('Erro ao criar patch panel');
-    }
-  };
-
-  const handleApagarPatchPanel = async (rackId, pp) => {
-    const confirmado = await prompt.confirm('Apagar patch panel', `Deseja apagar o patch panel ${pp.nome}?`);
-    if (!confirmado) return;
-    const newRacks = racks.map(r =>
-      r.id === rackId ? { ...r, patchPanels: r.patchPanels.filter(p => p.id !== pp.id) } : r
-    );
-    try {
-      await api.put('/api/racks', { mesas: [], racks: newRacks });
-      success('Patch panel apagado');
-      loadRacks();
-    } catch {
-      error('Erro ao apagar patch panel');
-    }
-  };
-
-  const handleTogglePortaAtencao = async (rackId, patchId, porta) => {
-    try {
-      await api.put('/api/ponto/toggle-atencao', { rackId, patchId, porta });
+  const handleDeleteAndar = andar => prompt.confirm('Excluir andar', `Excluir "${andar.nome}"? Todas as mesas deste andar serão removidas. Esta ação não pode ser desfeita.`, {
+    onConfirm: async () => {
+      requireSuccess(await api.del(`/api/andares/${andar.id}`));
+      success('Andar excluído');
+      await loadAndares();
       await loadRacks();
-    } catch {
-      error('Erro ao atualizar destaque');
     }
+  });
+
+  const handleCriarRack = () => prompt.text('Novo rack', 'Nome do rack', '', {
+    onSubmit: async nome => {
+      requireSuccess(await api.post('/api/racks', { nome }));
+      success('Rack criado');
+      await loadRacks();
+    }
+  });
+
+  const handleEditRack = rack => prompt.text('Editar rack', 'Nome do rack', rack.nome, {
+    onSubmit: async nome => {
+      if (nome === rack.nome) return;
+      requireSuccess(await api.put(`/api/racks/${rack.id}`, { nome }));
+      success('Rack atualizado');
+      await loadRacks();
+    }
+  });
+
+  const handleApagarRack = rack => prompt.confirm('Excluir rack', `Excluir o rack ${rack.nome}, seus patch panels e vínculos dos pontos?`, {
+    onConfirm: async () => {
+      const atual = requireSuccess(await api.get('/api/racks'));
+      requireSuccess(await api.put('/api/racks', { mesas: [], racks: atual.racks.filter(r => r.id !== rack.id) }));
+      success('Rack excluído');
+      await loadRacks();
+    }
+  });
+
+  const handleCriarPatchPanel = rackId => prompt.text('Novo patch panel', 'Nome do patch panel', '', {
+    onSubmit: async nome => {
+      const atual = requireSuccess(await api.get('/api/racks'));
+      if (!atual.racks.some(r => r.id === rackId)) throw new Error('O rack não está mais disponível.');
+      const newRacks = atual.racks.map(r => r.id === rackId ? { ...r, patchPanels: [...r.patchPanels, { id: Date.now(), nome, portas: 24 }] } : r);
+      requireSuccess(await api.put('/api/racks', { mesas: [], racks: newRacks }));
+      success('Patch panel criado');
+      await loadRacks();
+    }
+  });
+
+  const handleApagarPatchPanel = (rackId, pp) => prompt.confirm('Excluir patch panel', `Excluir o patch panel ${pp.nome} e os vínculos dos pontos?`, {
+    onConfirm: async () => {
+      const atual = requireSuccess(await api.get('/api/racks'));
+      const newRacks = atual.racks.map(r => r.id === rackId ? { ...r, patchPanels: r.patchPanels.filter(p => p.id !== pp.id) } : r);
+      requireSuccess(await api.put('/api/racks', { mesas: [], racks: newRacks }));
+      success('Patch panel excluído');
+      await loadRacks();
+    }
+  });
+
+  const handleTogglePortaAtencao = (rackId, patchId, porta) => {
+    const rack = racks.find(r => r.id === rackId);
+    const pp = rack?.patchPanels.find(p => p.id === patchId);
+    const mesa = mesas.find(m => m.pontos.some(p => p.rackId === rackId && p.patchId === patchId && p.porta === porta));
+    const ponto = mesa?.pontos.find(p => p.rackId === rackId && p.patchId === patchId && p.porta === porta);
+    if (!ponto) return;
+    return prompt.form('Destaque da porta', `${rack.nome} / ${pp.nome} / Porta ${porta} · ${mesa.nome} / P${ponto.id}`, [
+      { key: 'atencao', label: 'Destacar como atenção', type: 'checkbox', initialValue: Boolean(ponto.atencao) }
+    ], {
+      onSubmit: async values => {
+        const atual = requireSuccess(await api.get('/api/racks'));
+        const current = (atual.mesas || []).flatMap(m => m.pontos).find(p => p.rackId === rackId && p.patchId === patchId && p.porta === porta);
+        if (!current) throw new Error('A conexão não está mais disponível.');
+        if (values.atencao === Boolean(current.atencao)) return;
+        requireSuccess(await api.put('/api/ponto/toggle-atencao', { rackId, patchId, porta }));
+        success('Destaque atualizado');
+        await loadRacks();
+      }
+    });
   };
 
   const formatPontoResumo = (p) => {
@@ -317,25 +288,7 @@ export default function CompanyDashboard({ onSwitchCompany, onOpenAdmin, isViewe
                   </div>
                 ))}
               </div>
-              {!isViewer && (showAddForm ? (
-                <div className="dashboardInlineForm">
-                  <input
-                    type="text"
-                    placeholder="Nome do andar / setor"
-                    value={newName}
-                    onChange={e => setNewName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddAndar()}
-                    className="dashboardInput"
-                    autoFocus
-                  />
-                  <button className="btnSave" onClick={handleAddAndar}>Salvar</button>
-                  <button className="btnCancel" onClick={() => { setShowAddForm(false); setNewName(''); }}>Cancelar</button>
-                </div>
-              ) : (
-                <button className="btn-add-company" onClick={() => setShowAddForm(true)}>
-                  + Novo Andar
-                </button>
-              ))}
+              {!isViewer && <button className="btn-add-company" onClick={handleAddAndar}>+ Novo Andar</button>}
             </div>
 
             <div className="dashboardColumn">

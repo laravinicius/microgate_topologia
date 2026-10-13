@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { api } from '../api';
+import { api, requireSuccess } from '../api';
+
+import SystemModal from './SystemModal';
 
 const QR_SIZE = 113;
 const COLS = 5;
@@ -48,7 +50,7 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get('/api/qrcode/all-mesas');
+      const data = requireSuccess(await api.get('/api/qrcode/all-mesas'));
       if (data.success) {
         const filtered = data.mesas.filter(m => m.andarNome || m.andarNome === '');
         setMesas(filtered);
@@ -71,7 +73,7 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
         const dataUrl = await generateOneQR(url);
         setQrImages(prev => ({ ...prev, [mesa.id]: dataUrl }));
       } catch (e) {
-        console.error('Erro ao gerar QR para mesa', mesa.id, e);
+        setError('Não foi possível gerar todas as etiquetas. Feche e tente novamente.');
       }
       setProgress(i + 1);
     }
@@ -79,39 +81,9 @@ export default function QRCodeBatchPrint({ empresaSlug, onClose }) {
   };
 
   const handlePrint = useCallback(() => {
-    const allPages = [];
-    for (let i = 0; i < mesas.length; i += PER_PAGE) {
-      allPages.push(mesas.slice(i, i + PER_PAGE));
-    }
-
-    const pagesHtml = allPages.map((page, pageIndex) => {
-      const cells = page.map(mesa => {
-        const img = qrImages[mesa.id];
-        const label = mesa.andarNome ? `${mesa.andarNome} — ${mesa.nome}` : mesa.nome;
-        return `<div class="cell"><img src="${img}" class="qr"/><div class="label">${label}</div></div>`;
-      }).join('');
-      const breakStyle = pageIndex < allPages.length - 1 ? 'break-after: page;' : '';
-      return `<div class="page" style="${breakStyle}">${cells}</div>`;
-    }).join('');
-
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!DOCTYPE html>
-<html><head><title>QR Codes</title>
-<style>
-@page { size: A4; margin: 0; }
-body { margin: 0; padding: 0; }
-.page { width: 210mm; height: 297mm; padding: 10mm; box-sizing: border-box; display: grid; grid-template-columns: repeat(5, 1fr); gap: 5mm; align-content: start; }
-.cell { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.qr { width: 3cm; height: 3cm; image-rendering: pixelated; }
-.label { font-size: 8pt; text-align: center; margin-top: 2px; font-family: sans-serif; }
-</style>
-</head><body>${pagesHtml}
-<script>window.onload=function(){setTimeout(function(){window.print();window.close();},500);}<\/script></body></html>`);
-
-    printWindow.document.close();
-  }, [mesas, qrImages]);
+    if (loading || mesas.some(mesa => !qrImages[mesa.id])) return;
+    window.print();
+  }, [loading, mesas, qrImages]);
 
   const pages = [];
   for (let i = 0; i < mesas.length; i += PER_PAGE) {
@@ -120,32 +92,29 @@ body { margin: 0; padding: 0; }
 
   if (mesas.length === 0 && !loading && !error) {
     return (
-      <div className="qrcode-overlay" onClick={onClose}>
-        <div className="qrcode-panel qrcode-panel-wide" onClick={e => e.stopPropagation()}>
+      <SystemModal title="QR Codes em massa" onClose={onClose} dismissOnBackdrop overlayClass="qrcode-overlay" panelClass="qrcode-panel qrcode-panel-wide" print>
           <div className="qrcode-header">
             <h3>QR Codes em Massa</h3>
-            <button className="qrcode-close" onClick={onClose}>✕</button>
+            <button className="qrcode-close" aria-label="Fechar QR Codes" onClick={onClose}>✕</button>
           </div>
           <div className="qrcode-body">
             <div className="qrcode-empty">Nenhuma mesa cadastrada</div>
           </div>
-        </div>
-      </div>
+      </SystemModal>
     );
   }
 
   return (
-    <div className="qrcode-overlay" onClick={onClose}>
-      <div className="qrcode-panel qrcode-panel-wide" onClick={e => e.stopPropagation()}>
+    <SystemModal title="QR Codes em massa" onClose={onClose} dismissOnBackdrop overlayClass="qrcode-overlay" panelClass="qrcode-panel qrcode-panel-wide" print>
         <div className="qrcode-header">
           <h3>QR Codes em Massa — {mesas.length} mesas</h3>
           <div className="qrcode-header-actions">
             {!loading && mesas.length > 0 && (
-              <button className="qrcode-print-btn" onClick={handlePrint}>
+              <button className="qrcode-print-btn" onClick={handlePrint} disabled={mesas.some(mesa => !qrImages[mesa.id])}>
                 Imprimir
               </button>
             )}
-            <button className="qrcode-close" onClick={onClose}>✕</button>
+            <button className="qrcode-close" aria-label="Fechar QR Codes" onClick={onClose}>✕</button>
           </div>
         </div>
 
@@ -178,7 +147,6 @@ body { margin: 0; padding: 0; }
             </div>
           ))}
         </div>
-      </div>
-    </div>
+    </SystemModal>
   );
 }

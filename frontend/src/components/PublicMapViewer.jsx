@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+import SystemModal from './SystemModal';
+
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.1;
@@ -405,8 +407,7 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
 
       {/* Info Modal Overlay */}
       {showInfoModal && infoElement && (
-        <div className="map-info-overlay" onClick={closeInfoModal}>
-          <div className="map-info-panel" onClick={(e) => e.stopPropagation()}>
+        <SystemModal title={infoPatchPanel?.nome || infoElement.nome} onClose={closeInfoModal} dismissOnBackdrop overlayClass="map-info-overlay" panelClass="map-info-panel">
             {/* Mesa info */}
             {infoElement.tipo === 'mesa' && (() => {
               const mesaId = infoElement.dados_json?.mesaId;
@@ -415,7 +416,7 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
                 <>
                   <div className="map-info-header">
                     <h3>{mesa ? mesa.nome : infoElement.nome}</h3>
-                    <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                    <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                   </div>
                   {mesa && mesa.pontos && mesa.pontos.length > 0 ? (
                     <table className="map-info-table">
@@ -474,7 +475,7 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
                         <button className="map-info-back" onClick={backToRack}>← {rack?.nome || infoElement.nome}</button>
                         <h3>{patchPanel ? patchPanel.nome : 'Patch Panel'}</h3>
                       </div>
-                      <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                      <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                     </div>
                     {rackConnectionsLoading ? (
                       <div className="map-info-empty">Carregando...</div>
@@ -521,7 +522,7 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
                   <>
                     <div className="map-info-header">
                       <h3>{rack ? rack.nome : infoElement.nome}</h3>
-                      <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                      <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                     </div>
                     {patchPanels.length > 0 ? (
                       <div className="map-info-patch-list">
@@ -550,13 +551,12 @@ export default function PublicMapViewer({ empresaSlug, mesaId, andarId }) {
               <>
                 <div className="map-info-header">
                   <h3>{infoElement.nome}</h3>
-                  <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                  <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                 </div>
                 <div className="map-info-empty">Objeto sem informações de vínculo</div>
               </>
             )}
-          </div>
-        </div>
+        </SystemModal>
       )}
     </div>
   );

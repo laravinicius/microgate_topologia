@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
-import { api } from '../api';
+import { api, requireSuccess } from '../api';
+import { usePrompt } from './PromptModal';
 import AuthenticatedShell from './AuthenticatedShell';
 
 export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
   const { logout, selectCompany, isAdmin } = useAuth();
   const { success, error } = useNotification();
   const [empresas, setEmpresas] = useState([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newName, setNewName] = useState('');
+  const prompt = usePrompt();
 
   const loadEmpresas = useCallback(async () => {
     try {
@@ -36,47 +36,30 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
     }
   };
 
-  const handleAdd = async () => {
-    if (!newName.trim()) return;
-    try {
-      const data = await api.post('/api/empresas', { nome: newName.trim() });
-      if (data.success) {
-        success('Empresa criada');
-        setNewName('');
-        setShowAddForm(false);
-        loadEmpresas();
-      }
-    } catch (err) {
-      error('Erro ao criar empresa');
+  const handleAdd = () => prompt.text('Nova empresa', 'Nome da empresa', '', {
+    onSubmit: async nome => {
+      requireSuccess(await api.post('/api/empresas', { nome }));
+      success('Empresa criada');
+      await loadEmpresas();
     }
-  };
+  });
 
-  const handleEdit = async (empresa) => {
-    const nome = prompt('Novo nome:', empresa.nome);
-    if (!nome || nome.trim() === empresa.nome) return;
-    try {
-      const data = await api.put(`/api/empresas/${empresa.id}`, { nome: nome.trim() });
-      if (data.success) {
-        success('Empresa atualizada');
-        loadEmpresas();
-      }
-    } catch (err) {
-      error('Erro ao atualizar empresa');
+  const handleEdit = empresa => prompt.text('Editar empresa', 'Nome da empresa', empresa.nome, {
+    onSubmit: async nome => {
+      if (nome === empresa.nome) return;
+      requireSuccess(await api.put(`/api/empresas/${empresa.id}`, { nome }));
+      success('Empresa atualizada');
+      await loadEmpresas();
     }
-  };
+  });
 
-  const handleDelete = async (empresa) => {
-    if (!confirm(`Excluir "${empresa.nome}"? Esta ação não pode ser desfeita.`)) return;
-    try {
-      const data = await api.del(`/api/empresas/${empresa.id}`);
-      if (data.success) {
-        success('Empresa excluída');
-        loadEmpresas();
-      }
-    } catch (err) {
-      error('Erro ao excluir empresa');
+  const handleDelete = empresa => prompt.confirm('Excluir empresa', `Excluir "${empresa.nome}" e os dados associados? Esta ação não pode ser desfeita.`, {
+    onConfirm: async () => {
+      requireSuccess(await api.del(`/api/empresas/${empresa.id}`));
+      success('Empresa excluída');
+      await loadEmpresas();
     }
-  };
+  });
 
   return (
     <AuthenticatedShell
@@ -109,47 +92,7 @@ export default function CompanyScreen({ onCompanySelected, onOpenAdmin }) {
               </div>
             ))}
           </div>
-          {showAddForm ? (
-            <div style={{ display: 'flex', gap: 8, maxWidth: 500, width: '100%' }}>
-              <input
-                type="text"
-                placeholder="Nome da empresa"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                style={{
-                  flex: 1, padding: '10px 14px', borderRadius: 'var(--radius-md)',
-                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                  color: 'var(--text)', font: 'inherit', fontSize: '0.94rem'
-                }}
-                autoFocus
-              />
-              <button
-                onClick={handleAdd}
-                style={{
-                  padding: '10px 20px', borderRadius: 'var(--radius-sm)',
-                  background: 'var(--green)', border: 'none', color: 'white',
-                  font: 'inherit', fontWeight: 600, cursor: 'pointer'
-                }}
-              >
-                Salvar
-              </button>
-              <button
-                onClick={() => { setShowAddForm(false); setNewName(''); }}
-                style={{
-                  padding: '10px 20px', borderRadius: 'var(--radius-sm)',
-                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                  color: 'var(--text)', font: 'inherit', cursor: 'pointer'
-                }}
-              >
-                Cancelar
-              </button>
-            </div>
-          ) : isAdmin ? (
-            <button className="btn-add-company" onClick={() => setShowAddForm(true)}>
-              + Nova Empresa
-            </button>
-          ) : null}
+          {isAdmin && <button className="btn-add-company" onClick={handleAdd}>+ Nova Empresa</button>}
         </div>
       </div>
     </div>

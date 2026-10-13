@@ -911,7 +911,7 @@ main {
 .promptSistemaOverlay {
     position: fixed;
     inset: 0;
-    z-index: 10001;
+    z-index: 11001;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3475,10 +3475,6 @@ main {
     overflow: hidden;
 }
 
-.map-canvas-shell ~ .promptSistemaOverlay {
-    z-index: 11001;
-}
-
 .map-workspace-shell .map-editor-wrapper {
     position: relative;
     inset: auto;
@@ -3930,4 +3926,58 @@ button:not(:disabled):not([aria-disabled="true"]):active {
     .rackItemHeader {
         transition: none !important;
     }
+}
+
+/* Base comum dos popups: o conteúdo é montado fora da navegação fixa. */
+.map-element.selected { overflow: visible; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.system-modal-host { position: relative; z-index: 13000; }
+.system-modal-host[inert] { pointer-events: none; }
+.system-modal-overlay { position: fixed; inset: 0; z-index: 13000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, .65); overflow: auto; }
+.system-modal-panel { position: relative; min-width: 0; width: min(560px, 100%); max-width: calc(100vw - 40px); max-height: calc(100dvh - 40px); overflow: auto; overscroll-behavior: contain; outline: none; }
+.system-modal-panel.qrcode-panel-wide { width: min(1000px, 100%); }
+.system-modal-panel.map-info-panel { width: min(760px, 100%); }
+.system-modal-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.system-modal-heading h3 { margin: 0; }
+.promptSistema .system-modal-heading { position: sticky; top: -24px; z-index: 1; background: var(--bg-surface); padding-top: 24px; padding-bottom: 12px; margin-top: -24px; }
+.promptSistema .promptSistemaAcoes { position: sticky; bottom: 0; background: var(--bg-surface); padding-top: 12px; }
+.system-modal-panel.promptSistemaWide { width: min(720px, 100%); }
+@media (min-width: 600px) {
+  .promptSistemaWide .system-modal-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .promptSistemaWide .promptCampo:nth-child(-n+2) { grid-column: 1 / -1; }
+}
+.system-modal-close { flex-shrink: 0; width: 44px; height: 44px; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 24px; cursor: pointer; }
+.system-modal-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.system-modal-panel .promptCampo { margin-bottom: 14px; }
+.system-modal-panel .promptCampo > label { display: block; margin-bottom: 6px; font-weight: 600; }
+.system-modal-panel input:not([type=checkbox]), .system-modal-panel select { width: 100%; box-sizing: border-box; padding: 10px 12px; background: var(--bg-surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; min-height: 44px; }
+.system-modal-panel input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--green); }
+.system-modal-checkbox { display: flex; gap: 12px; align-items: center; min-height: 44px; }
+.system-modal-panel :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.system-modal-error { display: block; color: var(--red, #ef4444); margin-top: 6px; }
+.system-modal-panel [aria-invalid=true] { border-color: var(--red, #ef4444); }
+.system-modal-panel button { min-height: 44px; }
+.system-modal-panel button:disabled { cursor: wait; opacity: .6; }
+.system-modal-palette { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.system-modal-palette button { width: 44px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.system-modal-palette button[aria-pressed=true], .vinculoOpcao[aria-pressed=true] { outline: 2px solid var(--green); outline-offset: 2px; }
+.system-modal-panel .promptSistemaAcoes, .system-modal-panel .vinculoAcoes { flex-wrap: wrap; gap: 8px; }
+.system-modal-panel .map-info-table { width: 100%; }
+@media (max-width: 600px) {
+  .system-modal-overlay { padding: 12px; }
+  .system-modal-panel { max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 20px; }
+  .promptSistema .system-modal-heading { top: -20px; padding-top: 20px; margin-top: -20px; }
+  .system-modal-panel .promptSistemaAcoes > button { flex: 1; }
+  .system-modal-panel .map-info-table { font-size: 12px; }
+  .system-modal-panel .map-info-table th, .system-modal-panel .map-info-table td { padding: 6px; overflow-wrap: anywhere; }
+}
+@media print {
+  body:has(.system-modal-print) > :not(.system-modal-print) { display: none !important; }
+  body:has(.system-modal-print) { overflow: visible !important; background: white !important; }
+  .system-modal-print, .system-modal-print .system-modal-overlay, .system-modal-print .system-modal-panel { position: static !important; display: block !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; background: white !important; }
+  .system-modal-print .sr-only { display: none !important; }
+  body:has(.system-modal-print)::before { display: none !important; }
+  .system-modal-print .qrcode-page { grid-template-rows: repeat(7, minmax(0, 1fr)); row-gap: 3mm; break-inside: avoid; }
+  .system-modal-print .qrcode-cell { justify-content: start; }
+  .system-modal-print .qrcode-batch-label { font: 8pt/1.1 Arial, sans-serif; margin-top: 2px; max-width: 35mm; }
 }

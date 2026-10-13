@@ -1,5 +1,10 @@
 const TOKEN_KEY = 'inframap-auth-token';
 
+export function requireSuccess(data) {
+  if (!data?.success) throw new Error(data?.message || 'Não foi possível concluir a operação.');
+  return data;
+}
+
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
 }

@@ -11,7 +11,7 @@ import AuthenticatedShell from './components/AuthenticatedShell';
 import VinculoPanel from './components/VinculoPanel';
 import PublicMapViewer from './components/PublicMapViewer';
 import QRCodeModal from './components/QRCodeModal';
-import { api, getToken } from './api';
+import { api, getToken, requireSuccess } from './api';
 import { DEMO_DATA } from './data/demoData';
 
 function AppContent() {
@@ -82,63 +82,34 @@ function AppContent() {
     return () => es.close();
   }, [empresaId, andarId, user, carregarDadosServidor]);
 
-  const handleCriarMesa = useCallback(async () => {
-    const result = await prompt.form('Nova mesa', '', [
-      { key: 'nome', label: 'Nome da mesa', type: 'text', initialValue: '' },
-      { key: 'qtdPontos', label: 'Quantidade de pontos', type: 'number', initialValue: '8', min: 1, max: 255 }
-    ]);
-    if (!result || !result.nome) return;
-    const qtdPontos = Math.min(Math.max(Number(result.qtdPontos) || 8, 1), 255);
-    const novaMesa = {
-      id: Date.now(),
-      nome: result.nome,
-      x: 0, y: 0,
-      fixada: false,
-      pontos: Array.from({ length: qtdPontos }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null, atencao: false })),
-    };
-    const prev = data;
-    const mesas = [...prev.mesas, novaMesa];
-    const newData = { ...prev, mesas };
-    setData(newData);
-    try {
-      await api.put('/api/data', newData);
-      await carregarDadosServidor();
-    } catch {
+  const handleCriarMesa = useCallback(() => prompt.form('Nova mesa', '', [
+    { key: 'nome', label: 'Nome da mesa', required: true },
+    { key: 'qtdPontos', label: 'Quantidade de pontos', type: 'number', initialValue: 8, min: 1, max: 255, integer: true }
+  ], {
+    onSubmit: async values => {
+      const atual = requireSuccess(await api.get('/api/data'));
+      const novaMesa = { id: Date.now(), nome: values.nome, x: 0, y: 0, fixada: false,
+        pontos: Array.from({ length: Number(values.qtdPontos) }, (_, i) => ({ id: i + 1, rackId: null, patchId: null, porta: null, atencao: false })) };
+      requireSuccess(await api.put('/api/data', { ...atual, mesas: [...atual.mesas, novaMesa] }));
       await carregarDadosServidor();
     }
-  }, [data, prompt, carregarDadosServidor]);
+  }), [data, prompt, carregarDadosServidor]);
 
-  const handleRenomearMesa = useCallback(async (mesa) => {
-    const result = await prompt.form('Renomear mesa', '', [
-      { key: 'nome', label: 'Nome da mesa', type: 'text', initialValue: mesa.nome }
-    ]);
-    if (!result || !result.nome) return;
-    const prev = data;
-    const mesas = prev.mesas.map(m => m.id === mesa.id ? { ...m, nome: result.nome } : m);
-    const newData = { ...prev, mesas };
-    setData(newData);
-    try {
-      await api.put(`/api/mesas/${mesa.id}`, { nome: result.nome });
-      await carregarDadosServidor();
-    } catch {
+  const handleRenomearMesa = useCallback(mesa => prompt.text('Editar mesa', 'Nome da mesa', mesa.nome, {
+    onSubmit: async nome => {
+      if (nome === mesa.nome) return;
+      requireSuccess(await api.put(`/api/mesas/${mesa.id}`, { nome }));
       await carregarDadosServidor();
     }
-  }, [data, prompt, carregarDadosServidor]);
+  }), [prompt, carregarDadosServidor]);
 
-  const handleApagarMesa = useCallback(async (mesa) => {
-    const confirmado = await prompt.confirm('Apagar mesa', `Deseja apagar a mesa ${mesa.nome}?`);
-    if (!confirmado) return;
-    const prev = data;
-    const mesas = prev.mesas.filter(m => m.id !== mesa.id);
-    const newData = { ...prev, mesas };
-    setData(newData);
-    try {
-      await api.put('/api/data', newData);
-      await carregarDadosServidor();
-    } catch {
+  const handleApagarMesa = useCallback(mesa => prompt.confirm('Excluir mesa', `Excluir a mesa ${mesa.nome} e seus pontos? Esta ação não pode ser desfeita.`, {
+    onConfirm: async () => {
+      const atual = requireSuccess(await api.get('/api/data'));
+      requireSuccess(await api.put('/api/data', { ...atual, mesas: atual.mesas.filter(m => m.id !== mesa.id) }));
       await carregarDadosServidor();
     }
-  }, [data, prompt, carregarDadosServidor]);
+  }), [data, prompt, carregarDadosServidor]);
 
   const handleIniciarVinculo = useCallback((mesaId, pontoId) => {
     const mesa = data.mesas.find(m => m.id === mesaId);
@@ -154,6 +125,7 @@ function AppContent() {
       etapa: etapaInicial,
       rackId: ponto.rackId || null,
       patchId: ponto.patchId || null,
+      porta: ponto.porta || null,
       ponto,
       mesaNome: mesa.nome,
       mesas: data.allMesas
@@ -161,60 +133,38 @@ function AppContent() {
   }, [data]);
 
   const handleSelectRackVinculo = useCallback((rackId) => {
-    setVinculo(prev => ({ ...prev, rackId, patchId: null, etapa: 'patch' }));
+    setVinculo(prev => ({ ...prev, rackId, patchId: null, porta: null, etapa: 'patch' }));
   }, []);
 
   const handleSelectPatchVinculo = useCallback((patchId) => {
-    setVinculo(prev => ({ ...prev, patchId, etapa: 'porta' }));
+    setVinculo(prev => ({ ...prev, patchId, porta: null, etapa: 'porta' }));
   }, []);
 
-  const handleSelectPortaVinculo = useCallback(async (porta) => {
-    const current = vinculo;
-    if (!current) return;
-    const { mesaId, pontoId, rackId, patchId } = current;
+  const handleSelectPortaVinculo = useCallback(porta => {
+    setVinculo(prev => ({ ...prev, porta }));
+  }, []);
 
-    const portasLivres = (() => {
-      const rack = data.racks.find(r => r.id === rackId);
-      const pp = rack?.patchPanels.find(p => p.id === patchId);
-      if (!pp) return [];
-      const ocupadas = new Set();
-      const todasMesas = data.allMesas || data.mesas;
-      for (const m of todasMesas) {
-        for (const p of m.pontos) {
-          if (p.id === pontoId && m.id === mesaId) continue;
-          if (p.rackId === rackId && p.patchId === patchId && p.porta) ocupadas.add(p.porta);
-        }
-      }
-      return Array.from({ length: pp.portas }, (_, i) => i + 1).filter(p => !ocupadas.has(p));
-    })();
-
-    if (!portasLivres.includes(porta)) {
-      await prompt.alert('Porta indisponível', 'Essa porta não está mais livre.');
-      return;
+  const handleSalvarVinculo = useCallback(async () => {
+    if (!vinculo?.porta) throw new Error('Selecione uma porta.');
+    const { mesaId, pontoId, rackId, patchId, porta } = vinculo;
+    const atual = requireSuccess(await api.get('/api/data'));
+    const mesa = atual.mesas.find(m => m.id === mesaId);
+    if (!mesa?.pontos.some(p => p.id === pontoId)) throw new Error('O ponto não está mais disponível.');
+    const pp = atual.racks.find(r => r.id === rackId)?.patchPanels.find(p => p.id === patchId);
+    if (!pp || porta < 1 || porta > pp.portas) throw new Error('A porta não está mais disponível.');
+    if ((atual.allMesas || atual.mesas).some(m => m.pontos.some(p => !(m.id === mesaId && p.id === pontoId) && p.rackId === rackId && p.patchId === patchId && p.porta === porta))) {
+      throw new Error('Essa porta não está mais livre. Selecione outra porta.');
     }
-
+    const mesas = atual.mesas.map(m => m.id === mesaId ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId, patchId, porta } : p) } : m);
+    requireSuccess(await api.put('/api/data', { ...atual, mesas }));
+    await carregarDadosServidor();
     setVinculo(null);
-
-    const mesas = data.mesas.map(m =>
-      m.id === mesaId
-        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId, patchId, porta } : p) }
-        : m
-    );
-    const newData = { ...data, mesas };
-    setData(newData);
-
-    try {
-      await api.put('/api/data', newData);
-      await carregarDadosServidor();
-    } catch {
-      await carregarDadosServidor();
-    }
-  }, [data, vinculo, prompt, carregarDadosServidor]);
+  }, [vinculo, carregarDadosServidor]);
 
   const handleVoltarVinculo = useCallback(() => {
     setVinculo(prev => {
-      if (prev.etapa === 'patch') return { ...prev, etapa: 'rack', rackId: null };
-      if (prev.etapa === 'porta') return { ...prev, etapa: 'patch', patchId: null };
+      if (prev.etapa === 'patch') return { ...prev, etapa: 'rack', rackId: null, patchId: null, porta: null };
+      if (prev.etapa === 'porta') return { ...prev, etapa: 'patch', patchId: null, porta: null };
       return null;
     });
   }, []);
@@ -222,27 +172,19 @@ function AppContent() {
   const handleCancelarVinculo = useCallback(() => setVinculo(null), []);
 
   const handleDesvincular = useCallback(async () => {
-    const current = vinculo;
-    if (!current) return;
-    const { mesaId, pontoId } = current;
-
-    setVinculo(null);
-
-    const mesas = data.mesas.map(m =>
-      m.id === mesaId
-        ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId: null, patchId: null, porta: null } : p) }
-        : m
-    );
-    const newData = { ...data, mesas };
-    setData(newData);
-
-    try {
-      await api.put('/api/data', newData);
-      await carregarDadosServidor();
-    } catch {
-      await carregarDadosServidor();
-    }
-  }, [data, vinculo, carregarDadosServidor]);
+    if (!vinculo) return;
+    const { mesaId, pontoId } = vinculo;
+    const confirmado = await prompt.confirm('Limpar vínculo', `Remover o vínculo de ${vinculo.mesaNome} / P${pontoId}?`, {
+      submitLabel: 'Limpar',
+      onConfirm: async () => {
+        const atual = requireSuccess(await api.get('/api/data'));
+        const mesas = atual.mesas.map(m => m.id === mesaId ? { ...m, pontos: m.pontos.map(p => p.id === pontoId ? { ...p, rackId: null, patchId: null, porta: null } : p) } : m);
+        requireSuccess(await api.put('/api/data', { ...atual, mesas }));
+        await carregarDadosServidor();
+      }
+    });
+    if (confirmado) setVinculo(null);
+  }, [vinculo, prompt, carregarDadosServidor]);
 
   const handleSwitchCompany = useCallback(() => {
     clearEmpresa();
@@ -352,6 +294,7 @@ function AppContent() {
           onVoltar={handleVoltarVinculo}
           onCancelar={handleCancelarVinculo}
           onDesvincular={handleDesvincular}
+          onSalvar={handleSalvarVinculo}
         />
       )}
 

@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from './Notification';
-import { api } from '../api';
+import { api, requireSuccess } from '../api';
+
+import { usePrompt } from './PromptModal';
+import SystemModal, { hasOpenModal } from './SystemModal';
 
 const GRID = 20;
 const MIN_ZOOM = 0.25;
@@ -21,9 +24,13 @@ function snap(val) {
 export default function MapEditor({ onVoltar, readOnly = false, demoData = null }) {
   const { empresaId, empresaNome } = useAuth();
   const { success, error: showError } = useNotification();
+  const prompt = usePrompt();
+  const writeQueue = useRef(Promise.resolve());
+  const activeAndarRef = useRef(null);
 
   const [andares, setAndares] = useState([]);
   const [activeAndarId, setActiveAndarId] = useState(null);
+  activeAndarRef.current = activeAndarId;
   const [elements, setElements] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [mesas, setMesas] = useState([]);
@@ -39,13 +46,6 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
   // Keep refs in sync with state
   useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
   useEffect(() => { elementsRef.current = elements; }, [elements]);
-
-  const [showMesaMenu, setShowMesaMenu] = useState(false);
-  const [newMesaNome, setNewMesaNome] = useState('');
-  const [newMesaPontos, setNewMesaPontos] = useState(8);
-
-  const [showRackMenu, setShowRackMenu] = useState(false);
-  const [newRackNome, setNewRackNome] = useState('');
 
   const [showPropPanel, setShowPropPanel] = useState(true);
   const [hamburguerOpen, setHamburguerOpen] = useState(false);
@@ -219,83 +219,128 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
     setRackConnections([]);
   }, []);
 
-  // --- Save ---
-  const saveElements = useCallback(async () => {
-    if (saveStatusRef.current === 'saving') return;
-    saveStatusRef.current = 'saving';
-    setSaveStatus('saving');
-    try {
-      const data = await api.put('/api/map-elements/bulk', { elements: elementsRef.current, andarId: activeAndarId });
-      if (data.success) {
-        saveStatusRef.current = 'saved';
-        setSaveStatus('saved');
+  // Serializa o salvamento dos gestos e dos formulários, sem aplicar rascunhos.
+  const persistElements = useCallback(transform => {
+    const floor = activeAndarId;
+    const operation = writeQueue.current.catch(() => {}).then(async () => {
+      if (activeAndarRef.current !== floor) throw new Error('O andar selecionado mudou.');
+      const snapshot = transform ? transform(elementsRef.current) : elementsRef.current;
+      saveStatusRef.current = 'saving';
+      setSaveStatus('saving');
+      try {
+        requireSuccess(await api.put('/api/map-elements/bulk', { elements: snapshot, andarId: floor }));
+        if (activeAndarRef.current !== floor) return;
+        if (transform) {
+          elementsRef.current = snapshot;
+          setElements(snapshot);
+        }
+        const status = snapshot === elementsRef.current ? 'saved' : 'unsaved';
+        saveStatusRef.current = status;
+        setSaveStatus(status);
+      } catch (err) {
+        if (activeAndarRef.current === floor) {
+          saveStatusRef.current = 'unsaved';
+          setSaveStatus('unsaved');
+        }
+        throw err;
       }
-    } catch {
-      saveStatusRef.current = 'unsaved';
-      setSaveStatus('unsaved');
-      showError('Erro ao salvar');
-    }
-  }, [showError, activeAndarId]);
+    });
+    writeQueue.current = operation;
+    return operation;
+  }, [activeAndarId]);
 
+  const saveElements = useCallback(() => persistElements().catch(err => showError(err.message || 'Erro ao salvar')), [persistElements, showError]);
   const scheduleSave = useCallback(() => {
-    if (saveStatusRef.current === 'saving') {
-      saveStatusRef.current = 'unsaved';
-      setSaveStatus('unsaved');
-      return;
-    }
     saveStatusRef.current = 'unsaved';
     setSaveStatus('unsaved');
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      saveElements();
-    }, 1000);
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(saveElements, 1000);
   }, [saveElements]);
+  useEffect(() => () => clearTimeout(saveTimerRef.current), []);
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, []);
-
-  // --- Element operations ---
   const updateElement = useCallback((id, updates) => {
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
     scheduleSave();
   }, [scheduleSave]);
 
-  const addElement = useCallback((el) => {
-    setElements(prev => [...prev, el]);
-    scheduleSave();
-  }, [scheduleSave]);
+  const commitPopup = useCallback(async transform => {
+    clearTimeout(saveTimerRef.current);
+    await persistElements(transform);
+    success('Mapa atualizado');
+  }, [persistElements, success]);
 
-  const deleteElement = useCallback((id) => {
-    setElements(prev => prev.filter(e => e.id !== id));
-    setSelectedIds(prev => prev.filter(sid => sid !== id));
-    scheduleSave();
-  }, [scheduleSave]);
+  const buildElement = (tipo, nome, entityId) => ({
+    id: `temp-${Date.now()}`, empresa_id: empresaId, andarId: activeAndarId, tipo, nome,
+    x: snap(200), y: snap(200), ...DEFAULTS[tipo], rotacao: 0, ordem: elementsRef.current.length,
+    font_size: 12, dados_json: entityId ? (tipo === 'mesa' ? { mesaId: entityId } : { rackId: entityId }) : null
+  });
 
-  const createNewElement = useCallback((tipo, nome, entityId) => {
-    const def = DEFAULTS[tipo];
-    const el = {
-      id: `temp-${Date.now()}`,
-      empresa_id: empresaId,
-      andarId: activeAndarId,
-      tipo,
-      nome: nome || `${tipo} ${elements.length + 1}`,
-      x: snap(200),
-      y: snap(200),
-      largura: def.largura,
-      altura: def.altura,
-      cor: def.cor,
-      rotacao: 0,
-      ordem: elements.length,
-      font_size: 12,
-      dados_json: entityId ? (tipo === 'mesa' ? { mesaId: entityId } : { rackId: entityId }) : null,
-    };
-    addElement(el);
-    setSelectedIds([el.id]);
-  }, [empresaId, activeAndarId, elements.length, addElement]);
+  const openCreate = tipo => {
+    if (readOnly) return;
+    const available = (tipo === 'mesa' ? mesas : racks).filter(entity => !elementsRef.current.some(el => el.dados_json?.[tipo === 'mesa' ? 'mesaId' : 'rackId'] === entity.id));
+    const fields = tipo === 'objeto' ? [] : [{ key: 'entityId', label: `Selecionar ${tipo}`, type: 'select', initialValue: '',
+      options: [{ value: '', label: tipo === 'mesa' ? 'Nova representação de mesa' : 'Novo rack' }, ...available.map(entity => ({ value: String(entity.id), label: entity.nome }))] }];
+    fields.push({ key: 'nome', label: 'Nome', required: true, visibleWhen: values => !values.entityId });
+    let createdRack = null;
+    return prompt.form(`Adicionar ${tipo}`, tipo === 'mesa' ? 'Adicione uma representação ao mapa ou selecione uma mesa cadastrada para exibir seus pontos.' : '', fields, {
+      onSubmit: async values => {
+        let entityId = Number(values.entityId) || null;
+        let nome = entityId ? available.find(entity => entity.id === entityId)?.nome : values.nome;
+        if (tipo === 'rack' && !entityId) {
+          if (!createdRack) createdRack = requireSuccess(await api.post('/api/racks', { nome })).rack;
+          else if (createdRack.nome !== nome) {
+            requireSuccess(await api.put(`/api/racks/${createdRack.id}`, { nome }));
+            createdRack = { ...createdRack, nome };
+          }
+          entityId = createdRack.id;
+          nome = createdRack.nome;
+        }
+        const el = buildElement(tipo, nome, entityId);
+        await commitPopup(current => [...current, el]);
+        setSelectedIds([el.id]);
+        if (tipo === 'rack') await loadMesas(activeAndarId);
+      }
+    });
+  };
+
+  const openProperties = el => {
+    if (readOnly) return;
+    return prompt.form('Editar propriedades', `Tipo: ${el.tipo}`, [
+      { key: 'nome', label: 'Nome', initialValue: el.nome, required: true },
+      { key: 'cor', label: 'Cor', type: 'color', initialValue: el.cor },
+      { key: 'largura', label: 'Largura', type: 'number', initialValue: el.largura, min: GRID * 2, step: GRID },
+      { key: 'altura', label: 'Altura', type: 'number', initialValue: el.altura, min: GRID * 2, step: GRID },
+      { key: 'x', label: 'Posição X', type: 'number', initialValue: el.x, step: GRID },
+      { key: 'y', label: 'Posição Y', type: 'number', initialValue: el.y, step: GRID },
+      { key: 'rotacao', label: 'Rotação (graus)', type: 'number', initialValue: el.rotacao || 0, min: 0, max: 360 },
+      { key: 'font_size', label: 'Tamanho da fonte', type: 'number', initialValue: el.font_size || 12, min: 8, max: 36, integer: true }
+    ], { wide: true, onSubmit: async values => {
+      const updates = { ...values, largura: snap(Number(values.largura)), altura: snap(Number(values.altura)), x: snap(Number(values.x)), y: snap(Number(values.y)), rotacao: Number(values.rotacao), font_size: Number(values.font_size) };
+      await commitPopup(current => {
+        if (!current.some(item => item.id === el.id)) throw new Error('O elemento não está mais disponível.');
+        return current.map(item => item.id === el.id ? { ...item, ...updates } : item);
+      });
+    } });
+  };
+
+  const openFont = () => {
+    const ids = [...selectedIds];
+    const first = elementsRef.current.find(el => ids.includes(el.id));
+    return prompt.form('Editar tamanho da fonte', `${ids.length} elementos selecionados`, [
+      { key: 'font_size', label: 'Tamanho da fonte', type: 'number', initialValue: first?.font_size || 12, min: 8, max: 36, integer: true }
+    ], { onSubmit: values => commitPopup(current => current.map(el => ids.includes(el.id) ? { ...el, font_size: Number(values.font_size) } : el)) });
+  };
+
+  const requestDelete = useCallback(ids => {
+    if (readOnly || !ids.length) return;
+    const names = elementsRef.current.filter(el => ids.includes(el.id)).map(el => el.nome).join(', ');
+    return prompt.confirm('Excluir do mapa', `Excluir ${names}? Apenas as representações serão removidas; mesas, racks e vínculos cadastrados serão mantidos.`, {
+      onConfirm: async () => {
+        await commitPopup(current => current.filter(el => !ids.includes(el.id)));
+        setSelectedIds(current => current.filter(id => !ids.includes(id)));
+      }
+    });
+  }, [readOnly, prompt, commitPopup]);
 
   // --- Zoom ---
   const handleWheel = useCallback((e) => {
@@ -455,7 +500,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
   const dragging = useRef(null);
 
   const handleElementMouseDown = useCallback((e, el, handle) => {
-    if (readOnly) return;
+    if (readOnly || hasOpenModal()) return;
     if (e.shiftKey && !handle) {
       return;
     }
@@ -521,7 +566,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
       // Store initial positions of all selected elements
       const initialPositions = new Map();
       elements.forEach(item => {
-        if (selectedIds.includes(item.id)) {
+        if ((selectedIds.includes(el.id) ? selectedIds : [el.id]).includes(item.id)) {
           initialPositions.set(item.id, { x: item.x, y: item.y });
         }
       });
@@ -551,65 +596,21 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
     }
   }, [zoom, pan, selectedIds, elements, scheduleSave]);
 
-  // --- Keyboard ---
+  // Atalhos não atravessam popups, inclusive consultas e confirmações.
   useEffect(() => {
-    const handleKey = (e) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
-        // Don't delete if editing input
-        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-        selectedIds.forEach(id => deleteElement(id));
+    const handleKey = e => {
+      if (readOnly || hasOpenModal() || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
+        e.preventDefault();
+        requestDelete([...selectedIds]);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [selectedIds, deleteElement]);
+  }, [readOnly, selectedIds, requestDelete]);
 
-  // --- Double click to edit ---
-  const handleDoubleClick = useCallback((el) => {
-    if (readOnly) return;
-    const novoNome = prompt('Nome do elemento:', el.nome);
-    if (novoNome !== null) {
-      updateElement(el.id, { nome: novoNome });
-    }
-  }, [updateElement]);
-
-  // --- Selected element ---
-  const selected = selectedIds.length > 0 ? elements.find(e => e.id === selectedIds[0]) : null;
-
-  // --- Create element from existing mesa ---
-  const createFromMesa = useCallback((mesa) => {
-    createNewElement('mesa', mesa.nome, mesa.id);
-    setShowMesaMenu(false);
-  }, [createNewElement]);
-
-  const createNewMesa = useCallback(() => {
-    if (!newMesaNome.trim()) return;
-    createNewElement('mesa', newMesaNome.trim());
-    setNewMesaNome('');
-    setNewMesaPontos(8);
-    setShowMesaMenu(false);
-  }, [newMesaNome, createNewElement]);
-
-  // --- Create element from existing rack ---
-  const createFromRack = useCallback((rack) => {
-    createNewElement('rack', rack.nome, rack.id);
-    setShowRackMenu(false);
-  }, [createNewElement]);
-
-  const createNewRack = useCallback(async () => {
-    if (!newRackNome.trim()) return;
-    try {
-      const data = await api.post('/api/racks', { nome: newRackNome.trim() });
-      if (data.success) {
-        createNewElement('rack', data.rack.nome, data.rack.id);
-        setNewRackNome('');
-        setShowRackMenu(false);
-        loadMesas(activeAndarId);
-      }
-    } catch {
-      // ignore
-    }
-  }, [newRackNome, createNewElement, loadMesas, activeAndarId]);
+  const selected = selectedIds.length ? elements.find(el => el.id === selectedIds[0]) : null;
+  const handleDoubleClick = el => openProperties(el);
 
   // --- Canvas size ---
   const canvasSize = { width: 4000, height: 3000 };
@@ -756,227 +757,24 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
           </div>
         </div>
 
-        {/* Properties Panel */}
-        {!readOnly && showPropPanel && selected && (
-          <div className="map-properties">
-            <h3>Propriedades{selectedIds.length > 1 ? ` (${selectedIds.length} selecionados)` : ''}</h3>
-            <div className="map-prop-group">
-              <label>Nome</label>
-              <input
-                type="text"
-                value={selected.nome}
-                onChange={(e) => updateElement(selected.id, { nome: e.target.value })}
-              />
-            </div>
-            <div className="map-prop-group">
-              <label>Tipo</label>
-              <span className="map-prop-value">{selected.tipo}</span>
-            </div>
-            <div className="map-prop-group">
-              <label>Cor</label>
-              <input
-                type="color"
-                value={selected.cor}
-                onChange={(e) => updateElement(selected.id, { cor: e.target.value })}
-              />
-            </div>
-            <div className="map-prop-row">
-              <div className="map-prop-group">
-                <label>Largura</label>
-                <input
-                  type="number"
-                  value={selected.largura}
-                  min={GRID * 2}
-                  step={GRID}
-                  onChange={(e) => updateElement(selected.id, { largura: snap(Number(e.target.value)) })}
-                />
-              </div>
-              <div className="map-prop-group">
-                <label>Altura</label>
-                <input
-                  type="number"
-                  value={selected.altura}
-                  min={GRID * 2}
-                  step={GRID}
-                  onChange={(e) => updateElement(selected.id, { altura: snap(Number(e.target.value)) })}
-                />
-              </div>
-            </div>
-            <div className="map-prop-row">
-              <div className="map-prop-group">
-                <label>X</label>
-                <input
-                  type="number"
-                  value={selected.x}
-                  step={GRID}
-                  onChange={(e) => updateElement(selected.id, { x: snap(Number(e.target.value)) })}
-                />
-              </div>
-              <div className="map-prop-group">
-                <label>Y</label>
-                <input
-                  type="number"
-                  value={selected.y}
-                  step={GRID}
-                  onChange={(e) => updateElement(selected.id, { y: snap(Number(e.target.value)) })}
-                />
-              </div>
-            </div>
-            <div className="map-prop-group">
-              <label>Rotação</label>
-              <input
-                type="range"
-                min={0}
-                max={360}
-                value={selected.rotacao || 0}
-                onChange={(e) => updateElement(selected.id, { rotacao: Number(e.target.value) })}
-              />
-              <div className="map-rotate-controls">
-                <button
-                  className="map-rotate-btn"
-                  onClick={() => updateElement(selected.id, { rotacao: ((selected.rotacao || 0) - 90 + 360) % 360 })}
-                >
-                  ← 90°
-                </button>
-                <span className="map-prop-value">{selected.rotacao || 0}°</span>
-                <button
-                  className="map-rotate-btn"
-                  onClick={() => updateElement(selected.id, { rotacao: ((selected.rotacao || 0) + 90) % 360 })}
-                >
-                  90° →
-                </button>
-              </div>
-            </div>
-            <div className="map-prop-group">
-              <label>Tamanho da Fonte</label>
-              <div className="map-rotate-controls">
-                <button
-                  className="map-rotate-btn"
-                  onClick={() => selectedIds.forEach(id => updateElement(id, { font_size: Math.max(8, (elements.find(e => e.id === id)?.font_size || 12) - 1) }))}
-                >
-                  A-
-                </button>
-                <span className="map-prop-value">{selected.font_size || 12}px</span>
-                <button
-                  className="map-rotate-btn"
-                  onClick={() => selectedIds.forEach(id => updateElement(id, { font_size: Math.min(36, (elements.find(e => e.id === id)?.font_size || 12) + 1) }))}
-                >
-                  A+
-                </button>
-              </div>
-            </div>
-            <button
-              className="map-btn-delete"
-              onClick={() => selectedIds.forEach(id => deleteElement(id))}
-            >
-              🗑 Apagar{selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}
-            </button>
-          </div>
-        )}
-
-        {/* Toolbar */}
-        {!readOnly && (
-          <div className="map-toolbar">
-            <div className="map-toolbar-group">
-              <button
-                className="map-btn-add"
-                onClick={() => setShowMesaMenu(p => !p)}
-              >
-                + Mesa
-              </button>
-              <button
-                className="map-btn-add"
-                onClick={() => setShowRackMenu(p => !p)}
-              >
-                + Rack
-              </button>
-              <button
-                className="map-btn-add"
-                onClick={() => createNewElement('objeto')}
-              >
-                + Objeto
-              </button>
-            </div>
-
-            {/* Mesa creation menu */}
-            {showMesaMenu && (
-              <div className="map-mesa-menu">
-                <h4>Adicionar Mesa</h4>
-                {mesas.filter(m => !elements.some(e => e.dados_json?.mesaId === m.id)).length > 0 && (
-                  <>
-                    <div className="map-mesa-menu-section">Mesas existentes:</div>
-                    {mesas
-                      .filter(m => !elements.some(e => e.dados_json?.mesaId === m.id))
-                      .map(m => (
-                        <button
-                          key={m.id}
-                          className="map-mesa-item"
-                          onClick={() => createFromMesa(m)}
-                        >
-                          {m.nome} ({m.qtdPontos} pts)
-                        </button>
-                      ))}
-                  </>
-                )}
-                <div className="map-mesa-menu-section">Nova mesa:</div>
-                <input
-                  type="text"
-                  placeholder="Nome da mesa"
-                  value={newMesaNome}
-                  onChange={(e) => setNewMesaNome(e.target.value)}
-                  className="map-input"
-                />
-                <div className="map-prop-group">
-                  <label>Pontos: {newMesaPontos}</label>
-                  <input
-                    type="range"
-                    min={2}
-                    max={24}
-                    value={newMesaPontos}
-                    onChange={(e) => setNewMesaPontos(Number(e.target.value))}
-                  />
-                </div>
-                <button className="map-btn-save" onClick={createNewMesa}>
-                  Criar mesa
-                </button>
-              </div>
-            )}
-
-            {/* Rack creation menu */}
-            {showRackMenu && (
-              <div className="map-mesa-menu">
-                <h4>Adicionar Rack</h4>
-                {racks.filter(r => !elements.some(e => e.dados_json?.rackId === r.id)).length > 0 && (
-                  <>
-                    <div className="map-mesa-menu-section">Racks existentes:</div>
-                    {racks
-                      .filter(r => !elements.some(e => e.dados_json?.rackId === r.id))
-                      .map(r => (
-                        <button
-                          key={r.id}
-                          className="map-mesa-item"
-                          onClick={() => createFromRack(r)}
-                        >
-                          {r.nome} ({r.patchPanels?.length || 0} PP)
-                        </button>
-                      ))}
-                  </>
-                )}
-                <div className="map-mesa-menu-section">Novo rack:</div>
-                <input
-                  type="text"
-                  placeholder="Nome do rack"
-                  value={newRackNome}
-                  onChange={(e) => setNewRackNome(e.target.value)}
-                  className="map-input"
-                />
-                <button className="map-btn-save" onClick={createNewRack}>
-                  Criar rack
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        {!readOnly && showPropPanel && selected && <div className="map-properties">
+          <h3>Propriedades{selectedIds.length > 1 ? ` (${selectedIds.length} selecionados)` : ''}</h3>
+          {selectedIds.length === 1 ? <>
+            <div className="map-prop-group"><label>Nome</label><span className="map-prop-value">{selected.nome}</span></div>
+            <div className="map-prop-group"><label>Tipo</label><span className="map-prop-value">{selected.tipo}</span></div>
+            <div className="map-prop-group"><label>Dimensões</label><span className="map-prop-value">{selected.largura} × {selected.altura}</span></div>
+            <div className="map-prop-group"><label>Posição</label><span className="map-prop-value">{selected.x}, {selected.y}</span></div>
+            <div className="map-prop-group"><label>Rotação</label><span className="map-prop-value">{selected.rotacao || 0}°</span></div>
+            <div className="map-prop-group"><label>Cor / fonte</label><span className="map-prop-value">{selected.cor} / {selected.font_size || 12}px</span></div>
+            <button className="map-btn-save" onClick={() => openProperties(selected)}>Editar propriedades</button>
+          </> : <button className="map-btn-save" onClick={openFont}>Editar tamanho da fonte</button>}
+          <button className="map-btn-delete" onClick={() => requestDelete([...selectedIds])}>Excluir{selectedIds.length > 1 ? ` (${selectedIds.length})` : ''}</button>
+        </div>}
+        {!readOnly && <div className="map-toolbar"><div className="map-toolbar-group">
+          <button className="map-btn-add" onClick={() => openCreate('mesa')}>+ Mesa</button>
+          <button className="map-btn-add" onClick={() => openCreate('rack')}>+ Rack</button>
+          <button className="map-btn-add" onClick={() => openCreate('objeto')}>+ Objeto</button>
+        </div></div>}
 
         {/* Zoom Controls */}
         <div className="map-zoom-controls">
@@ -1002,8 +800,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
 
       {/* Info Modal Overlay */}
       {showInfoModal && infoElement && (
-        <div className="map-info-overlay" onClick={closeInfoModal}>
-          <div className="map-info-panel" onClick={(e) => e.stopPropagation()}>
+        <SystemModal title={infoPatchPanel?.nome || infoElement.nome} onClose={closeInfoModal} dismissOnBackdrop overlayClass="map-info-overlay" panelClass="map-info-panel">
             {/* Mesa info */}
             {infoElement.tipo === 'mesa' && (() => {
               const mesaId = infoElement.dados_json?.mesaId;
@@ -1012,7 +809,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
                 <>
                   <div className="map-info-header">
                     <h3>{mesa ? mesa.nome : infoElement.nome}</h3>
-                    <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                    <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                   </div>
                   {mesa && mesa.pontos && mesa.pontos.length > 0 ? (
                     <table className="map-info-table">
@@ -1071,7 +868,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
                         <button className="map-info-back" onClick={backToRack}>← {rack?.nome || infoElement.nome}</button>
                         <h3>{patchPanel ? patchPanel.nome : 'Patch Panel'}</h3>
                       </div>
-                      <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                      <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                     </div>
                     {rackConnectionsLoading ? (
                       <div className="map-info-empty">Carregando...</div>
@@ -1118,7 +915,7 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
                   <>
                     <div className="map-info-header">
                       <h3>{rack ? rack.nome : infoElement.nome}</h3>
-                      <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                      <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                     </div>
                     {patchPanels.length > 0 ? (
                       <div className="map-info-patch-list">
@@ -1147,13 +944,12 @@ export default function MapEditor({ onVoltar, readOnly = false, demoData = null 
               <>
                 <div className="map-info-header">
                   <h3>{infoElement.nome}</h3>
-                  <button className="map-info-close" onClick={closeInfoModal}>✕</button>
+                  <button className="map-info-close" aria-label="Fechar informações" onClick={closeInfoModal}>✕</button>
                 </div>
                 <div className="map-info-empty">Objeto sem informações de vínculo</div>
               </>
             )}
-          </div>
-        </div>
+        </SystemModal>
       )}
     </div>
   );
